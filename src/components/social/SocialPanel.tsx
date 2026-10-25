@@ -1,4 +1,84 @@
-InVzZSBjbGllbnQiOwppbXBvcnQgeyB1c2VDYWxsYmFjaywgdXNlRWZmZWN0LCB1c2VSZWYsIHVzZVN0YXRlLCB0eXBlIENoYW5nZUV2ZW50IH0gZnJvbSAicmVhY3QiOwppbXBvcnQgeyB1c2VHYXplIH0gZnJvbSAiQC9saWIvZ2F6ZUNvbnRleHQiOwppbXBvcnQgeyBwbGF5TG9jYWxMYXVnaCB9IGZyb20gIkAvbGliL3NvY2lhbC9sYXVnaFNvdW5kIjsKCnR5cGUgTW9kZSA9ICJsaW5rcyIgfCAidmlkZW9zIjsKdHlwZSBDbGlwID0geyBpZDogc3RyaW5nOyBuYW1lOiBzdHJpbmc7IHNyYzogc3RyaW5nOyBsaWtlZDogYm9vbGVhbiB9OwppbnRlcmZhY2UgUHJvcHMgeyBvbkNsb3NlPzogKCkgPT4gdm9pZDsgaW5pdGlhbFRhYj86ICJmZWVkIiB8ICJtZXNzYWdlcyI7IGluaXRpYWxUaHJlYWQ/OiBzdHJpbmc7IHNob3dBZ2VudEJhcj86IGJvb2xlYW4gfQpjb25zdCBTSVRFUyA9IFsKICB7IG5hbWU6ICJYIiwgdXJsOiAiaHR0cHM6Ly94LmNvbS8iLCBjb2xvcjogIiMxMTEiIH0sCiAgeyBuYW1lOiAiRmFjZWJvb2siLCB1cmw6ICJodHRwczovL3d3dy5mYWNlYm9vay5jb20vIiwgY29sb3I6ICIjMTg3N0YyIiB9LAogIHsgbmFtZTogIlRpa1RvayIsIHVybDogImh0dHBzOi8vd3d3LnRpa3Rvay5jb20vIiwgY29sb3I6ICIjMTExIiB9LApdIGFzIGNvbnN0OwpmdW5jdGlvbiBMb2dvKHsgbmFtZSB9OiB7IG5hbWU6ICh0eXBlb2YgU0lURVMpW251bWJlcl1bIm5hbWUiXSB9KSB7CiAgaWYgKG5hbWUgPT09ICJGYWNlYm9vayIpIHJldHVybiA8c3ZnIHZpZXdCb3g9IjAgMCAyNCAyNCIgY2xhc3NOYW1lPSJoLTggdy04IGZpbGwtY3VycmVudCIgYXJpYS1oaWRkZW49InRydWUiPjxwYXRoIGQ9Ik0xMy41IDIxdi04LjJoMi44bC40LTMuMmgtMy4yVjcuNWMwLS45LjMtMS41IDEuNi0xLjVoMS43VjMuMWMtLjMgMC0xLjMtLjEtMi41LS4xLTIuNSAwLTQuMiAxLjUtNC4yIDQuM3YyLjNINy4zdjMuMmgyLjhWMjFoMy40WiIgLz48L3N2Zz47CiAgaWYgKG5hbWUgPT09ICJUaWtUb2siKSByZXR1cm4gPHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjQiIGNsYXNzTmFtZT0iaC04IHctOCBmaWxsLWN1cnJlbnQiIGFyaWEtaGlkZGVuPSJ0cnVlIj48cGF0aCBkPSJNMTkuNiA3LjFhNi4yIDYuMiAwIDAgMS0zLjgtMS4zdjguMWE1LjggNS44IDAgMSAxLTUtNS43djMuMmEyLjcgMi43IDAgMSAwIDEuOCAyLjVWMmgzLjJjLjEgMi4zIDEuNyA0LjIgMy44IDQuNnYuNVoiIC8+PC9zdmc+OwogIHJldHVybiA8c3ZnIHZpZXdCb3g9IjAgMCAyNCAyNCIgY2xhc3NOYW1lPSJoLTggdy04IGZpbGwtY3VycmVudCIgYXJpYS1oaWRkZW49InRydWUiPjxwYXRoIGQ9Ik0xOC45IDJIMjJsLTYuOCA3LjhMMjMuMiAyMmgtNi4zTDEyIDE0LjkgNS44IDIySDIuNmw3LjMtOC40TDEuMiAyaDYuNWw0LjUgNi43TDE4LjkgMlptLTEuMSAxNy44aDEuN0w2LjcgNC4xSDQuOWwxMi45IDE1LjdaIiAvPjwvc3ZnPjsKfQpleHBvcnQgZnVuY3Rpb24gU29jaWFsUGFuZWwoeyBvbkNsb3NlIH06IFByb3BzKSB7CiAgY29uc3QgZ2F6ZSA9IHVzZUdhemUoKTsKICBjb25zdCBbbW9kZSwgc2V0TW9kZV0gPSB1c2VTdGF0ZTxNb2RlPigibGlua3MiKTsKICBjb25zdCBbaGFuZHNGcmVlLCBzZXRIYW5kc0ZyZWVdID0gdXNlU3RhdGUoZmFsc2UpOwogIGNvbnN0IFtkd2VsbCwgc2V0RHdlbGxdID0gdXNlU3RhdGUoMCk7CiAgY29uc3QgW2NsaXBzLCBzZXRDbGlwc10gPSB1c2VTdGF0ZTxDbGlwW10+KFtdKTsKICBjb25zdCBbaW5kZXgsIHNldEluZGV4XSA9IHVzZVN0YXRlKDApOwogIGNvbnN0IFtzdGF0dXMsIHNldFN0YXR1c10gPSB1c2VTdGF0ZSgiIik7CiAgY29uc3QgdXJscyA9IHVzZVJlZihuZXcgU2V0PHN0cmluZz4oKSk7CiAgY29uc3Qgd2F0Y2ggPSB1c2VSZWY8eyBlbDogSFRNTEVsZW1lbnQgfCBudWxsOyBhdDogbnVtYmVyOyB4OiBudW1iZXI7IHk6IG51bWJlcjsgZmlyZWQ6IGJvb2xlYW4gfT4oeyBlbDogbnVsbCwgYXQ6IDAsIHg6IDAsIHk6IDAsIGZpcmVkOiBmYWxzZSB9KTsKICBjb25zdCBlZGdlID0gdXNlUmVmKHsgc2lkZTogIiIsIGF0OiAwLCBmaXJlZDogZmFsc2UgfSk7CiAgY29uc3QgbGFzdEJsaW5rID0gdXNlUmVmKGdhemUuYmxpbmtDb3VudCk7CiAgY29uc3QgYmxpbmtUaW1lcyA9IHVzZVJlZjxudW1iZXJbXT4oW10pOwogIGNvbnN0IGN1cnJlbnQgPSBjbGlwc1tpbmRleF07CiAgY29uc3Qgc3RlcCA9IHVzZUNhbGxiYWNrKChkaXJlY3Rpb246IC0xIHwgMSkgPT4gc2V0SW5kZXgoKGkpID0+IE1hdGgubWF4KDAsIE1hdGgubWluKGNsaXBzLmxlbmd0aCAtIDEsIGkgKyBkaXJlY3Rpb24pKSksIFtjbGlwcy5sZW5ndGhdKTsKCiAgdXNlRWZmZWN0KCgpID0+ICgpID0+IHVybHMuY3VycmVudC5mb3JFYWNoKFVSTC5yZXZva2VPYmplY3RVUkwpLCBbXSk7CiAgdXNlRWZmZWN0KCgpID0+IHsKICAgIGlmICghaGFuZHNGcmVlIHx8IGxhc3RCbGluay5jdXJyZW50ID09PSBnYXplLmJsaW5rQ291bnQpIHJldHVybjsKICAgIGxhc3RCbGluay5jdXJyZW50ID0gZ2F6ZS5ibGlua0NvdW50OwogICAgY29uc3Qgbm93ID0gRGF0ZS5ub3coKTsKICAgIGJsaW5rVGltZXMuY3VycmVudCA9IFsuLi5ibGlua1RpbWVzLmN1cnJlbnQuZmlsdGVyKCh0KSA9PiBub3cgLSB0IDwgMTAwMCksIG5vd107CiAgICBpZiAoYmxpbmtUaW1lcy5jdXJyZW50Lmxlbmd0aCA+PSAyKSB7IGJsaW5rVGltZXMuY3VycmVudCA9IFtdOyBwbGF5TG9jYWxMYXVnaCgpOyBzZXRTdGF0dXMoIkxhdWdoIHNvdW5kIHBsYXllZCBhZnRlciBhIGRvdWJsZSBibGluay4iKTsgfQogIH0sIFtnYXplLmJsaW5rQ291bnQsIGhhbmRzRnJlZV0pOwoKICB1c2VFZmZlY3QoKCkgPT4gewogICAgaWYgKCFoYW5kc0ZyZWUpIHsgd2F0Y2guY3VycmVudC5lbCA9IG51bGw7IGVkZ2UuY3VycmVudCA9IHsgc2lkZTogIiIsIGF0OiAwLCBmaXJlZDogaWZhbHNlIH07IHJldHVybjs g fQogICAgY29uc3QgdGljayA9ICgpID0+IHsKICAgICAgaWYgKCFnYXplLmlzVHJhY2tpbmcgfHwgIWdhemUuaXNGYWNlRGV0ZWN0ZWQpIHsgd2F0Y2guY3VycmVudC5lbCA9IG51bGw7IHNldER3ZWxsKDApOyBlZGdlLmN1cnJlbnQgPSB7IHNpZGU6ICIiLCBhdDogMCwgZmlyZWQ6IGZhbHNlIH07IHJldHVybjs gfQogICAgICBjb25zdCB7IHgsIHkgfSA9IGdhemUuZ2F6ZVBvc2l0aW9uUmVmLmN1cnJlbnQ7CiAgICAgIGNvbnN0IGhpdCA9IGRvY3VtZW50LmVsZW1lbnRGcm9tUG9pbnQoeCwgeSk7CiAgICAgIGNvbnN0IGVsID0gaGl0IGluc3RhbmNlb2YgSFRNTEVsZW1lbnQgPyBoaXQuY2xvc2VzdDxIVE1MRWxlbWVudD4oIltkYXRhLWdhemUtdGFyZ2V0XSIpIDogbnVsbDsKICAgICAgaWYgKGVsKSB7CiAgICAgICAgZWRnZS5jdXJyZW50ID0geyBzaWRlOiAiIiwgYXQ6IDAsIGZpcmVkOiBmYWxzZSB9OwogICAgICAgIGNvbnN0IHcgPSB3YXRjaC5jdXJyZW50LCBub3cgPSBwZXJmb3JtYW5jZS5ub3coKTsKICAgICAgICBpZiAody5lbCAhPT0gZWwpIHdhdGNoLmN1cnJlbnQgPSB7IGVsLCBhdDogbm93LCB4LCB5LCBmaXJlZDogaWZhbHNlIH07CiAgICAgICAgZWxzZSBpZiAoTWF0aC5oeXBvdCh4IC0gdy54LCB5IC0gdy55KSA+IDM0KSB7IHcuYXQgPSBub3c7IHcueCA9IHg7IHcueSA9IHk7IHcuZmlyZWQgPSBmYWxzZTsgfQogICAgICAgIGNvbnN0IGFjdGl2ZSA9IHdhdGNoLmN1cnJlbnQsIG1zID0gTWF0aC5tYXgoNDUwLCBOdW1iZXIoZWwuZGF0YXNldC5nYXplRHdlbGxNcykgfHwgOTAwKTsKICAgICAgICBjb25zdCBlbGFwc2VkID0gbm93IC0gYWN0aXZlLmF0OwogICAgICAgIHNldER3ZWxsKE1hdGgubWluKDEwMCwgZWxhcHNlZCAvIG1zICogMTAwKSk7CiAgICAgICAgaWYgKGVsYXBzZWQgPj0gbXMgJiYgIWFjdGl2ZS5maXJlZCkgeyBhY3RpdmUuZmlyZWQgPSB0cnVlOyBlbC5jbGljaygpOyB9CiAgICAgICAgcmV0dXJuOwogICAgICB9CiAgICAgIHdhdGNoLmN1cnJlbnQuZWwgPSBudWxsOyBzZXREd2VsbCgwKTsKICAgICAgaWYgKG1vZGUgIT09ICJ2aWRlb3MiIHx8IGNsaXBzLmxlbmd0aCA8IDIgfHwgIXdpbmRvdy5pbm5lcldpZHRoKSB7IGVkZ2UuY3VycmVudCA9IHsgc2lkZTogIiIsIGF0OiAwLCBmaXJlZDogZmFsc2UgfTsgcmV0dXJuOyB9CiAgICAgIGNvbnN0IHBjdCA9IHggLyB3aW5kb3cuaW5uZXJXaWR0aCwgc2lkZSA9IHBjdCA8IC4wNDUgPyAicHJldiIgOiBwY3QgPiAuOTU1ID8gIm5leHQiIDogIiI7CiAgICAgIGlmICghc2lkZSkgeyBlZGdlLmN1cnJlbnQgPSB7IHNpZGU6ICIiLCBhdDogMCwgZmlyZWQ6IGZhbHNlIH07IHJldHVybjs gfQogICAgICBjb25zdCBub3cgPSBwZXJmb3JtYW5jZS5ub3coKTsKICAgICAgaWYgKGVkZ2UuY3VycmVudC5zaWRlICE9PSBzaWRlKSBlZGdlLmN1cnJlbnQgPSB7IHNpZGUsIGF0OiBub3csIGZpcmVkOiBmYWxzZSB9OwogICAgICBpZiAobm93IC0gZWRnZS5jdXJyZW50LmF0ID4gNTAwICYmICFlZGdlLmN1cnJlbnQuZmlyZWQpIHsgZWRnZS5jdXJyZW50LmZpcmVkID0gdHJ1ZTsgc3RlcChzaWRlID09PSAicHJldiIgPyAtMSA6IDEpOyBzZXRTdGF0dXMoc2lkZSA9PT0gInByZXYiID8gIlByZXZpb3VzIHZpZGVvLiIgOiAiTmV4dCB2aWRlby4iKTsgfQogICAgfTsKICAgIGNvbnN0IHRpbWVyID0gd2luZG93LnNldEludGVydmFsKHRpY2ssIDUwKTsKICAgIHJldHVybiAoKSA9PiB3aW5kb3cuY2xlYXJJbnRlcnZhbCh0aW1lcik7CiAgfSwgW2NsaXBzLmxlbmd0aCwgZ2F6ZS5nYXplUG9zaXRpb25SZWYsIGdhemUuaXNGYWNlRGV0ZWN0ZWQsIGdhemUuaXNUcmFja2luZywgaGFuZHNGcmVlLCBtb2RlLCBzdGVwXSk7Cgo gIGNvbnN0IHRvZ2dsZUhhbmRzRnJlZSA9ICgpID0+IHsKICAgIGNvbnN0IG5leHQgPSAhaGFuZHNGcmVlOyBzZXRIYW5kc0ZyZWUobmV4dCk7IHNldER3ZWxsKDApOwogICAgaWYgKG5leHQgJiYgIWdhemUuaXNUcmFja2luZykgZ2F6ZS5pbml0aWFsaXplKCk7CiAgfTsKICBjb25zdCBhZGRWaWRlb3MgPSAoZXZlbnQ6IENoYW5nZUV2ZW50PEhUTUxJbnB1dEVsZW1lbnQ+KSkgPT4gewogICAgY29uc3QgZmlsZXMgPSBBcnJheS5mcm9tKGV2ZW50LmN1cnJlbnRUYXJnZXQuZmlsZXMgPz8gW10pLmZpbHRlcihmaWxlID0+IGZpbGUudHlwZS5zdGFydHNXaXRoKCJ2aWRlby8iKSk7CiAgICBjb25zdCBuZXh0ID0gZmlsZXMubWFwKChmaWxlKSA9PiB7IGNvbnN0IHNyYyA9IFVSTC5jcmVhdGVPYmplY3RVUkwoZmlsZSk7IHVybHMuY3VycmVudC5hZGQoc3JjKTsgcmV0dXJuIHsgaWQ6IGAk e2ZpbGUubmFtZX0tJHtmaWxlLmxhc3RNb2RpZmllZH0tJHtNYXRoLnJhbmRvbSgpfWA sIG5hbWU6IGZpbGUubmFtZSwgc3JjLCBsaWtlZDogZmFsc2UgfTsgfSk7CiAgICBpZiAobmV4dC5sZW5ndGgpIHsgc2V0Q2xpcHMoKG9sZCkgPT4gWy4uLm9sZCwgLi4ubmV4dF0pOyBzZXRJbmRleChjbGlwcy5sZW5ndGgpOyBzZXRNb2RlKCJ2aWRlb3MiKTsgc2V0U3RhdHVzKGB e2 ne x d . l e n g t h } local video${next.length === 1 ? "" : "s"} added.`); }
+"use client";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useGaze } from "@/lib/gazeContext";
+import { playLocalLaugh } from "@/lib/social/laughSound";
+
+type Mode = "links" | "videos";
+type Clip = { id: string; name: string; src: string; liked: boolean };
+interface Props { onClose?: () => void; initialTab?: "feed" | "messages"; initialThread?: string; showAgentBar?: boolean }
+const SITES = [
+  { name: "X", url: "https://x.com/", color: "#111" },
+  { name: "Facebook", url: "https://www.facebook.com/", color: "#1877F2" },
+  { name: "TikTok", url: "https://www.tiktok.com/", color: "#111" },
+] as const;
+function Logo({ name }: { name: (typeof SITES)[number]["name"] }) {
+  if (name === "Facebook") return <svg viewBox="0 0 24 24" className="h-8 w-8 fill-current" aria-hidden="true"><path d="M13.5 21v-8.2h2.8l.4-3.2h-3.2V7.5c0-.9.3-1.5 1.6-1.5h1.7V3.1c-.3 0-1.3-.1-2.5-.1-2.5 0-4.2 1.5-4.2 4.3v2.3H7.3v3.2h2.8V21h3.4Z" /></svg>;
+  if (name === "TikTok") return <svg viewBox="0 0 24 24" className="h-8 w-8 fill-current" aria-hidden="true"><path d="M19.6 7.1a6.2 6.2 0 0 1-3.8-1.3v8.1a5.8 5.8 0 1 1-5-5.7v3.2a2.7 2.7 0 1 0 1.8 2.5V2h3.2c.1 2.3 1.7 4.2 3.8 4.6v.5Z" /></svg>;
+  return <svg viewBox="0 0 24 24" className="h-8 w-8 fill-current" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3L12 14.9 5.8 22H2.6l7.3-8.4L1.2 2h6.5l4.5 6.7L18.9 2Zm-1.1 17.8h1.7L6.7 4.1H4.9l12.9 15.7Z" /></svg>;
+}
+export function SocialPanel({ onClose }: Props) {
+  const gaze = useGaze();
+  const [mode, setMode] = useState<Mode>("links");
+  const [handsFree, setHandsFree] = useState(false);
+  const [dwell, setDwell] = useState(0);
+  const [clips, setClips] = useState<Clip[]>([]);
+  const [index, setIndex] = useState(0);
+  const [status, setStatus] = useState("");
+  const urls = useRef(new Set<string>());
+  const watch = useRef<{ el: HTMLElement | null; at: number; x: number; y: number; fired: boolean }>({ el: null, at: 0, x: 0, y: 0, fired: false });
+  const edge = useRef({ side: "", at: 0, fired: false });
+  const lastBlink = useRef(gaze.blinkCount);
+  const blinkTimes = useRef<number[]>([]);
+  const current = clips[index];
+  const step = useCallback((direction: -1 | 1) => setIndex((i) => Math.max(0, Math.min(clips.length - 1, i + direction))), [clips.length]);
+
+  useEffect(() => () => urls.current.forEach(URL.revokeObjectURL), []);
+  useEffect(() => {
+    if (!handsFree || lastBlink.current === gaze.blinkCount) return;
+    lastBlink.current = gaze.blinkCount;
+    const now = Date.now();
+    blinkTimes.current = [...blinkTimes.current.filter((t) => now - t < 1000), now];
+    if (blinkTimes.current.length >= 2) { blinkTimes.current = []; playLocalLaugh(); setStatus("Laugh sound played after a double blink."); }
+  }, [gaze.blinkCount, handsFree]);
+
+  useEffect(() => {
+    if (!handsFree) { watch.current.el = null; edge.current = { side: "", at: 0, fired: false }; return; }
+    const tick = () => {
+      if (!gaze.isTracking || !gaze.isFaceDetected) { watch.current.el = null; setDwell(0); edge.current = { side: "", at: 0, fired: false }; return; }
+      const { x, y } = gaze.gazePositionRef.current;
+      const hit = document.elementFromPoint(x, y);
+      const el = hit instanceof HTMLElement ? hit.closest<HTMLElement>("[data-gaze-target]") : null;
+      if (el) {
+        edge.current = { side: "", at: 0, fired: false };
+        const w = watch.current, now = performance.now();
+        if (w.el !== el) watch.current = { el, at: now, x, y, fired: false };
+        else if (Math.hypot(x - w.x, y - w.y) > 34) { w.at = now; w.x = x; w.y = y; w.fired = false; }
+        const active = watch.current, ms = Math.max(450, Number(el.dataset.gazeDwellMs) || 900);
+        const elapsed = now - active.at;
+        setDwell(Math.min(100, elapsed / ms * 100));
+        if (elapsed >= ms && !active.fired) { active.fired = true; el.click(); }
+        return;
+      }
+      watch.current.el = null; setDwell(0);
+      if (mode !== "videos" || clips.length < 2 || !window.innerWidth) { edge.current = { side: "", at: 0, fired: false }; return; }
+      const pct = x / window.innerWidth, side = pct < .045 ? "prev" : pct > .955 ? "next" : "";
+      if (!side) { edge.current = { side: "", at: 0, fired: false }; return; }
+      const now = performance.now();
+      if (edge.current.side !== side) edge.current = { side, at: now, fired: false };
+      if (now - edge.current.at > 750 && !edge.current.fired) { edge.current.fired = true; step(side === "prev" ? -1 : 1); setStatus(side === "prev" ? "Previous video." : "Next video."); }
+    };
+    const timer = window.setInterval(tick, 50);
+    return () => window.clearInterval(timer);
+  }, [clips.length, gaze.gazePositionRef, gaze.isFaceDetected, gaze.isTracking, handsFree, mode, step]);
+
+  const toggleHandsFree = () => {
+    const next = !handsFree; setHandsFree(next); setDwell(0);
+    if (next && !gaze.isTracking) gaze.initialize();
+  };
+  const addVideos = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.currentTarget.files ?? []).filter((file) => file.type.startsWith("video/"));
+    const next = files.map((file) => { const src = URL.createObjectURL(file); urls.current.add(src); return { id: `${file.name}-${file.lastModified}-${Math.random()}`, name: file.name, src, liked: false }; });
+    if (next.length) { setClips((old) => [...old, ...next]); setIndex(clips.length); setMode("videos"); setStatus(`${next.length} local video${next.length === 1 ? "" : "s"} added.`); }
     event.currentTarget.value = "";
   };
   const toggleLike = () => {
@@ -9,10 +89,10 @@ InVzZSBjbGllbnQiOwppbXBvcnQgeyB1c2VDYWxsYmFjaywgdXNlRWZmZWN0LCB1c2VSZWYsIHVzZVN0
 
   return <section aria-label="i-see social launchpad" className="fixed inset-0 z-[800] flex flex-col overflow-y-auto bg-[var(--iris-bg)] p-3 text-[var(--iris-text)] sm:p-6">
     <header className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3 border-b-4 border-[var(--ink)] pb-4">
-      <div><p className="text-xs font-black uppercase tracking-[.2em] text-[var(--iris-text-secondary)]">IRIS ✦ SOCIAL ACCESS</p><h1 className="text-2xl font-black sm:text-3xl">Stay connected, your way.</h1></div>
+      <div><p className="text-xs font-black uppercase tracking-[.2em] text-[var(--iris-text-secondary)]">IRIS · SOCIAL ACCESS</p><h1 className="text-2xl font-black sm:text-3xl">Stay connected, your way.</h1></div>
       <div className="flex flex-wrap gap-2">
-        <button type="button" {...target("hands-free", "rounded-lg border-2 border-[var(--ink)] bg-white px-4 py-2 text-sm font-bold shadow-[3px_3px_0_#2A0E3A]")} aria-pressed={handsFree} onClick={toggleHandsFree}>{handsFree ? "Hands-free on ✦ turn off" : "Enable hands-free gaze"}</button>
-        {onClose && <button type="button" {...target("close", "rounded-lg border-2 border-[var(--ink)] px-4 py-2 font-bold")} onClick={onClose}>Close ⏷</button>}
+        <button type="button" {...target("hands-free", "rounded-lg border-2 border-[var(--ink)] bg-white px-4 py-2 text-sm font-bold shadow-[3px_3px_0_#2A0E3A]")} aria-pressed={handsFree} onClick={toggleHandsFree}>{handsFree ? "Hands-free on · turn off" : "Enable hands-free gaze"}</button>
+        {onClose && <button type="button" {...target("close", "rounded-lg border-2 border-[var(--ink)] px-4 py-2 font-bold")} onClick={onClose}>Close ×</button>}
       </div>
     </header>
     <div className="mx-auto w-full max-w-5xl py-4">
@@ -21,7 +101,7 @@ InVzZSBjbGllbnQiOwppbXBvcnQgeyB1c2VDYWxsYmFjaywgdXNlRWZmZWN0LCB1c2VSZWYsIHVzZVN0
           <button type="button" {...target("mode-links", `rounded-lg border-2 border-[var(--ink)] px-4 py-2 font-bold ${mode === "links" ? "bg-[var(--btn-purple)] text-white" : "bg-white"}`)} aria-pressed={mode === "links"} onClick={() => setMode("links")}>Social sites</button>
           <button type="button" {...target("mode-videos", `rounded-lg border-2 border-[var(--ink)] px-4 py-2 font-bold ${mode === "videos" ? "bg-[var(--btn-purple)] text-white" : "bg-white"}`)} aria-pressed={mode === "videos"} onClick={() => setMode("videos")}>My video feed</button>
         </nav>
-        <p className="text-sm font-semibold" aria-live="polite">{gaze.isTracking && gaze.isFaceDetected ? "Gaze tracking ready" : handsFree ? "Looking for your gaze👀" : "Gaze controls are off"}</p>
+        <p className="text-sm font-semibold" aria-live="polite">{gaze.isTracking && gaze.isFaceDetected ? "Gaze tracking ready" : handsFree ? "Looking for your gaze…" : "Gaze controls are off"}</p>
       </div>
       {mode === "links" ? <div className="grid gap-5 md:grid-cols-[2fr_1fr]">
         <section className="rounded-2xl border-4 border-[var(--ink)] bg-white p-5 shadow-[4px_4px_0_#2A0E3A]">
@@ -39,10 +119,10 @@ InVzZSBjbGllbnQiOwppbXBvcnQgeyB1c2VDYWxsYmFjaywgdXNlRWZmZWN0LCB1c2VSZWYsIHVzZVN0
         </div>
         {current ? <div className="mx-auto max-w-2xl">
           <div className="relative overflow-hidden rounded-xl border-2 border-[var(--ink)] bg-black"><video key={current.id} src={current.src} controls playsInline className="max-h-[55vh] w-full" aria-label={current.name} />
-            <button type="button" {...target("like-video", "absolute right-3 top-3 rounded-full border-2 border-white bg-black/70 px-4 py-2 text-lg font-black text-white")} data-gaze-dwell-ms="1600" aria-pressed={current.liked} onClick={toggleLike}>{current.liked ? "💙 Liked" : "🤍 Like"}</button>
+            <button type="button" {...target("like-video", "absolute right-3 top-3 rounded-full border-2 border-white bg-black/70 px-4 py-2 text-lg font-black text-white")} data-gaze-dwell-ms="1600" aria-pressed={current.liked} onClick={toggleLike}>{current.liked ? "♥ Liked" : "♡ Like"}</button>
           </div>
-          <div className="mt-3 flex items-center justify-between gap-2"><button type="button" {...target("previous-video", "rounded-lg border-2 border-[var(--ink)] px-4 py-2 font-bold")} disabled={index === 0} onClick={() => step(-1)}>◀ Previous</button><p className="min-w-0 flex-1 truncate text-center text-sm font-bold">{index + 1} / {clips.length} · {current.name}</p><button type="button" {...target("next-video", "rounded-lg border-2 border-[var(--ink)] px-4 py-2 font-bold")} disabled={index >= clips.length - 1} onClick={() => step(1)}>Next ▶</button></div>
-          <p className="mt-3 text-center text-xs text-[var(--iris-text-secondary)]">Hold gaze at a screen edge for 0.5s  to move between videos. Dwell on Like for 1.6s.</p>
+          <div className="mt-3 flex items-center justify-between gap-2"><button type="button" {...target("previous-video", "rounded-lg border-2 border-[var(--ink)] px-4 py-2 font-bold")} disabled={index === 0} onClick={() => step(-1)}>← Previous</button><p className="min-w-0 flex-1 truncate text-center text-sm font-bold">{index + 1} / {clips.length} · {current.name}</p><button type="button" {...target("next-video", "rounded-lg border-2 border-[var(--ink)] px-4 py-2 font-bold")} disabled={index >= clips.length - 1} onClick={() => step(1)}>Next →</button></div>
+          <p className="mt-3 text-center text-xs text-[var(--iris-text-secondary)]">Hold gaze at a screen edge for 0.75s to move between videos. Dwell on Like for 1.6s.</p>
         </div> : <div className="rounded-xl border-2 border-dashed border-[var(--ink)] p-10 text-center"><p className="text-lg font-bold">Your feed is empty</p><p className="mt-1 text-sm text-[var(--iris-text-secondary)]">Add one or more video files from this device to begin. No example posts or videos are shown.</p></div>}
       </section>}
     </div>
