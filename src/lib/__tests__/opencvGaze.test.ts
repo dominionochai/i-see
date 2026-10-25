@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { CalibrationManager, CALIBRATION_TARGETS, type CalibrationSample } from "../calibration";
 import { EMASmooth } from "../emaSmooth";
+import { estimateRawGaze } from "../gazeEstimator";
 import { HomographyCalibration } from "../homographyCalibration";
 import { OneEuroSmooth } from "../oneEuroSmooth";
 import { loadOpenCv, type OpenCv } from "../opencvVision";
@@ -150,5 +151,27 @@ describe("OneEuroSmooth", () => {
     smoother.reset();
     clock.t = 5010;
     assert.deepEqual(smoother.update(10, 20), { x: 10, y: 20 });
+  });
+});
+
+describe("estimateRawGaze (jitter fix)", () => {
+  function baseLandmarks() {
+    return Array.from({ length: 478 }, () => ({ x: 0.5, y: 0.5, z: 0 }));
+  }
+
+  it("maps gaze y to eye-socket depth", () => {
+    const lm = baseLandmarks();
+    lm[159].y = 0.2; lm[145].y = 0.4;   // left socket top/bottom
+    lm[386].y = 0.2; lm[374].y = 0.4;   // right socket top/bottom
+    lm[468].y = 0.25; lm[473].y = 0.25; // irises at 25% depth
+    assert.ok(Math.abs(estimateRawGaze(lm)!.y - 0.25) < 1e-9);
+  });
+
+  it("keeps gaze y stable when the head moves vertically", () => {
+    const lm = baseLandmarks();
+    lm[159].y = 0.3; lm[145].y = 0.5;
+    lm[386].y = 0.3; lm[374].y = 0.5;
+    lm[468].y = 0.35; lm[473].y = 0.35; // whole face shifted +0.1
+    assert.ok(Math.abs(estimateRawGaze(lm)!.y - 0.25) < 1e-9);
   });
 });

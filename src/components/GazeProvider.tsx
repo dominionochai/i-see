@@ -108,6 +108,9 @@ export function GazeProvider({ children, autoStart = false }: { children: ReactN
   // High-frequency values live in refs so per-frame updates never re-render.
   const gazePositionRef = useRef<GazePosition>({ x: 0.5, y: 0.5 });
   const rawIrisRef = useRef<GazePosition>({ x: 0.5, y: 0.5 }) as MutableRefObject<GazePosition>;
+  // Last accepted raw estimate; rejects teleport frames where the tracker
+  // lost and re-acquired the eye (glare, blink, quick turn).
+  const prevRawRef = useRef<GazePosition | null>(null);
   const overlayRef = useRef<TrackingOverlay>(NO_OVERLAY);
   const landmarkBufferRef = useRef(new Float32Array(LANDMARK_COUNT * 2));
   const hoverStateRef = useRef<HoverState>({ isHovering: false, dwellPct: 0 });
@@ -147,6 +150,7 @@ export function GazeProvider({ children, autoStart = false }: { children: ReactN
     const landmarks = landmarker.detectForVideo(video, timestamp).faceLandmarks[0];
     if (!landmarks) {
       overlayRef.current = NO_OVERLAY;
+      prevRawRef.current = null;
       setFaceDetected(false);
       return;
     }
@@ -155,6 +159,16 @@ export function GazeProvider({ children, autoStart = false }: { children: ReactN
     // Hold the cursor while the lids are closed: iris landmarks swing downward mid-blink.
     const raw = isBlinking ? null : estimateRawGaze(landmarks);
     if (raw) {
+      // Teleport guard: a >0.6 normalized jump means the eye was lost and
+      // re-acquired. Skip the frame and hold the last good position.
+      const prev = prevRawRef.current;
+      if (prev && (Math.abs(raw.x - prev.x) > 0.6 || Math.abs(raw.y - prev.y) > 0.6)) {
+        prevRawRef.current = raw; // resync so a real re-acquire is never locked out
+        overlayRef.current = buildOverlay(landmarks, landmarkBufferRef.current);
+        setFaceDetected(true);
+        return;
+      }
+      prevRawRef.current = raw;
       rawIrisRef.current = raw;
       const target = calibrationRef.current.apply(raw.x, raw.y)
         ?? { x: raw.x * window.innerWidth, y: raw.y * window.innerHeight };
