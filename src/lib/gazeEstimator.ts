@@ -26,6 +26,11 @@ export const RIGHT_EYE_OUTER = 263;
 export const LEFT_EAR_IDX  = [33, 160, 158, 133, 153, 144];
 export const RIGHT_EAR_IDX = [263, 387, 385, 362, 380, 374];
 
+/** MediaPipe can emit non-finite values on frame boundaries (glare, motion blur). */
+function isFiniteLandmark(p: NormalizedLandmark | undefined): p is NormalizedLandmark {
+  return Boolean(p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z));
+}
+
 /**
  * Compute raw (normalized) gaze direction from iris landmarks.
  *
@@ -43,7 +48,7 @@ export function estimateRawGaze(
 ): { x: number; y: number } | null {
   const li = lm[IRIS_LEFT];
   const ri = lm[IRIS_RIGHT];
-  if (!li || !ri) return null;
+  if (!isFiniteLandmark(li) || !isFiniteLandmark(ri)) return null;
 
   // Use iris position relative to eye socket to decouple head movement
   // from gaze
@@ -55,10 +60,12 @@ export function estimateRawGaze(
   let gazeX: number;
   let gazeY: number;
 
-  if (lio && lii && rio && rii) {
-    // Iris ratio within eye socket: 0 = outer corner, 1 = inner corner
-    const leftSpan  = Math.abs(lio.x - lii.x) || 0.001;
-    const rightSpan = Math.abs(rio.x - rii.x) || 0.001;
+  if (isFiniteLandmark(lio) && isFiniteLandmark(lii) && isFiniteLandmark(rio) && isFiniteLandmark(rii)) {
+    // Iris ratio within eye socket: 0 = outer corner, 1 = inner corner.
+    // The 0.01 floor keeps the ratio bounded when a head turn squeezes the
+    // visible eye width; a near-zero span would amplify tracker noise.
+    const leftSpan  = Math.abs(lio.x - lii.x) || 0.01;
+    const rightSpan = Math.abs(rio.x - rii.x) || 0.01;
 
     const leftRatio  = (li.x - Math.min(lio.x, lii.x)) / leftSpan;
     const rightRatio = (ri.x - Math.min(rio.x, rii.x)) / rightSpan;
@@ -79,9 +86,12 @@ export function estimateRawGaze(
   const rTop = lm[386];
   const rBot = lm[374];
 
-  if (lTop && lBot && rTop && rBot) {
-    const lSpan = Math.abs(lBot.y - lTop.y) || 0.001;
-    const rSpan = Math.abs(rBot.y - rTop.y) || 0.001;
+  if (isFiniteLandmark(lTop) && isFiniteLandmark(lBot) && isFiniteLandmark(rTop) && isFiniteLandmark(rBot)) {
+    // 0.02 floor: as the lids close the socket span collapses toward zero,
+    // which would turn the ratio into a wild swing. The blink detector holds
+    // the cursor, but this floor stops the one-frame snap when detection lags.
+    const lSpan = Math.abs(lBot.y - lTop.y) || 0.02;
+    const rSpan = Math.abs(rBot.y - rTop.y) || 0.02;
     const lRatio = (li.y - Math.min(lTop.y, lBot.y)) / lSpan;
     const rRatio = (ri.y - Math.min(rTop.y, rBot.y)) / rSpan;
     gazeY = Math.max(0, Math.min(1, (lRatio + rRatio) / 2));

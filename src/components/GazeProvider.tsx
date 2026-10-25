@@ -28,6 +28,10 @@ const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmark
 const GAZE_SMOOTHING_ALPHA = 0.12;
 /** Pixels the arrow keys move the cursor (accessibility / demo fallback). */
 const KEYBOARD_NUDGE_PX = 32;
+/** Normalized jump (>60% of the eye range) means the tracker lost and re-acquired the eye. */
+const TELEPORT_JUMP = 0.6;
+/** Mid-range jumps are eased toward the previous position instead of followed instantly. */
+const SPIKE_JUMP = 0.35;
 
 /** MediaPipe's face mesh has 468 face points plus 10 iris points. */
 const LANDMARK_COUNT = 478;
@@ -109,7 +113,8 @@ export function GazeProvider({ children, autoStart = false }: { children: ReactN
   const gazePositionRef = useRef<GazePosition>({ x: 0.5, y: 0.5 });
   const rawIrisRef = useRef<GazePosition>({ x: 0.5, y: 0.5 }) as MutableRefObject<GazePosition>;
   // Last accepted raw estimate; rejects teleport frames where the tracker
-  // lost and re-acquired the eye (glare, blink, quick turn).
+  // lost and re-acquired the eye (glare, blink, quick turn). Kept across
+  // face loss so a re-acquire never jumps straight to a new position.
   const prevRawRef = useRef<GazePosition | null>(null);
   const overlayRef = useRef<TrackingOverlay>(NO_OVERLAY);
   const landmarkBufferRef = useRef(new Float32Array(LANDMARK_COUNT * 2));
@@ -150,7 +155,6 @@ export function GazeProvider({ children, autoStart = false }: { children: ReactN
     const landmarks = landmarker.detectForVideo(video, timestamp).faceLandmarks[0];
     if (!landmarks) {
       overlayRef.current = NO_OVERLAY;
-      prevRawRef.current = null;
       setFaceDetected(false);
       return;
     }
@@ -162,11 +166,18 @@ export function GazeProvider({ children, autoStart = false }: { children: ReactN
       // Teleport guard: a >0.6 normalized jump means the eye was lost and
       // re-acquired. Skip the frame and hold the last good position.
       const prev = prevRawRef.current;
-      if (prev && (Math.abs(raw.x - prev.x) > 0.6 || Math.abs(raw.y - prev.y) > 0.6)) {
+      if (prev && (Math.abs(raw.x - prev.x) > TELEPORT_JUMP || Math.abs(raw.y - prev.y) > TELEPORT_JUMP)) {
         prevRawRef.current = raw; // resync so a real re-acquire is never locked out
         overlayRef.current = buildOverlay(landmarks, landmarkBufferRef.current);
         setFaceDetected(true);
         return;
+      }
+      // Spike guard: mid-range jumps (glare flicker, motion blur) are eased
+      // toward the last accepted position instead of followed instantly, so
+      // the cursor never snaps across the screen on a single bad frame.
+      if (prev && (Math.abs(raw.x - prev.x) > SPIKE_JUMP || Math.abs(raw.y - prev.y) > SPIKE_JUMP)) {
+        raw.x = prev.x + (raw.x - prev.x) * 0.3;
+        raw.y = prev.y + (raw.y - prev.y) * 0.3;
       }
       prevRawRef.current = raw;
       rawIrisRef.current = raw;
@@ -185,14 +196,27 @@ export function GazeProvider({ children, autoStart = false }: { children: ReactN
   const startLoop = useCallback(() => {
     let lastVideoTime = -1;
     let lastTimestamp = -1;
+    let stillAlive = 0;
 
     const tick = () => {
+      stillAlive += 1;
+      // If MediaPipe stops producing landmarks the loop can spin hot without
+      // ever yielding progress; bail out and let initialize() restart it.
+      if (stillAlive > 120) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+        return;
+      }
       rafRef.current = requestAnimationFrame(tick);
       const video = videoRef.current;
       const landmarker = landmarkerRef.current;
       if (!video || !landmarker || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
-      if (video.currentTime === lastVideoTime) return; // no new camera frame yet
+      if (video.currentTime === lastVideoTime) {
+        stillAlive += 1;
+        return; // no new camera frame yet
+      }
       lastVideoTime = video.currentTime;
+      stillAlive = 0;
 
       // MediaPipe requires strictly increasing timestamps.
       lastTimestamp = Math.max(performance.now(), lastTimestamp + 1);

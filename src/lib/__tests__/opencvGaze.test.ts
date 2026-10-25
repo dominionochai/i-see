@@ -174,4 +174,10 @@ describe("estimateRawGaze (jitter fix)", () => {
     lm[468].y = 0.35; lm[473].y = 0.35; // whole face shifted +0.1
     assert.ok(Math.abs(estimateRawGaze(lm)!.y - 0.25) < 1e-9);
   });
+
+  it("returns null when iris landmarks are not finite", () => {
+    const lm = baseLandmarks();
+    lm[468].y = NaN;
+    assert.equal(estimateRawGaze(lm), null);
+  });
 });
