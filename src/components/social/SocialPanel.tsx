@@ -1,308 +1,134 @@
 "use client";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useGaze } from "@/lib/gazeContext";
+import { playLocalLaugh } from "@/lib/social/laughSound";
 
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { GazeAction, GazeSelectScope } from "@/components/GazeSelectScope";
-import MindReaderKeyboard from "@/components/MindReaderKeyboard";
-import { useAgent } from "@/components/AgentProvider";
-import { brutal } from "@/components/ui/brutal";
-import { useGazeEdgeScroll } from "@/hooks/useGazeEdgeScroll";
-import { AGENT_SCROLL_ATTRIBUTE } from "@/lib/agent/performer";
-import { CONTACTS } from "@/lib/contacts";
-import { AUTO_REPLIES, DEFAULT_REPLY, createInitialSocialState, friendById } from "@/lib/social/mockFeed";
-import { socialReducer } from "@/lib/social/socialReducer";
-import { ME, type Post } from "@/lib/social/types";
-
-type Tab = "feed" | "messages";
-type Field = "post" | "comment" | "message";
-
-const AGENT_PRESETS = [
-  "Message Maya that I'm feeling better today",
-  "Like Sam's sunset post",
-  "Post: good morning everyone",
-  "Reply to Grandma Lou's banana bread post saying I can't wait",
+type Mode = "links" | "videos";
+type Clip = { id: string; name: string; src: string; liked: boolean };
+interface Props { onClose?: () => void; initialTab?: "feed" | "messages"; initialThread?: string; showAgentBar?: boolean }
+const SITES = [
+  { name: "X", url: "https://x.com/", color: "#111" },
+  { name: "Facebook", url: "https://www.facebook.com/", color: "#1877F2" },
+  { name: "TikTok", url: "https://www.tiktok.com/", color: "#111" },
 ] as const;
-
-const AUTO_REPLY_DELAY_MS = 1600;
-const THREAD_IDS: readonly string[] = CONTACTS.map((contact) => contact.id);
-
-const fieldClass = brutal.field;
-const primaryButton = brutal.buttonPrimary;
-const ghostButton = brutal.button;
-
-function Avatar({ friendId }: { friendId: string }) {
-  const friend = friendById(friendId);
-  return (
-    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 border-[var(--ink)] text-sm font-black text-white ${friend.color}`}>
-      {friend.name[0]}
-    </span>
-  );
+function Logo({ name }: { name: (typeof SITES)[number]["name"] }) {
+  if (name === "Facebook") return <svg viewBox="0 0 24 24" className="h-8 w-8 fill-current" aria-hidden="true"><path d="M13.5 21v-8.2h2.8l.4-3.2h-3.2V7.5c0-.9.3-1.5 1.6-1.5h1.7V3.1c-.3 0-1.3-.1-2.5-.1-2.5 0-4.2 1.5-4.2 4.3v2.3H7.3v3.2h2.8V21h3.4Z" /></svg>;
+  if (name === "TikTok") return <svg viewBox="0 0 24 24" className="h-8 w-8 fill-current" aria-hidden="true"><path d="M19.6 7.1a6.2 6.2 0 0 1-3.8-1.3v8.1a5.8 5.8 0 1 1-5-5.7v3.2a2.7 2.7 0 1 0 1.8 2.5V2h3.2c.1 2.3 1.7 4.2 3.8 4.6v.5Z" /></svg>;
+  return <svg viewBox="0 0 24 24" className="h-8 w-8 fill-current" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3L12 14.9 5.8 22H2.6l7.3-8.4L1.2 2h6.5l4.5 6.7L18.9 2Zm-1.1 17.8h1.7L6.7 4.1H4.9l12.9 15.7Z" /></svg>;
 }
+export function SocialPanel({ onClose }: Props) {
+  const gaze = useGaze();
+  const [mode, setMode] = useState<Mode>("links");
+  const [handsFree, setHandsFree] = useState(false);
+  const [dwell, setDwell] = useState(0);
+  const [clips, setClips] = useState<Clip[]>([]);
+  const [index, setIndex] = useState(0);
+  const [status, setStatus] = useState("");
+  const urls = useRef(new Set<string>());
+  const watch = useRef<{ el: HTMLElement | null; at: number; x: number; y: number; fired: boolean }>({ el: null, at: 0, x: 0, y: 0, fired: false });
+  const edge = useRef({ side: "", at: 0, fired: false });
+  const lastBlink = useRef(gaze.blinkCount);
+  const blinkTimes = useRef<number[]>([]);
+  const current = clips[index];
+  const step = useCallback((direction: -1 | 1) => setIndex((i) => Math.max(0, Math.min(clips.length - 1, i + direction))), [clips.length]);
 
-const clip = (text: string, max = 60) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
-
-interface SocialPanelProps {
-  /** Where to start. Defaults to the feed. */
-  initialTab?: Tab;
-  /** Contact whose conversation to open first (with `initialTab="messages"`). */
-  initialThread?: string;
-  /** Omit to hide the close button (e.g. on the stand-alone mock site). */
-  onClose?: () => void;
-  /** Whether to show the "Ask i-see to…" bar. The mock site the agent drives hides it. */
-  showAgentBar?: boolean;
-}
-
-export function SocialPanel({ onClose, showAgentBar = true, initialTab = "feed", initialThread }: SocialPanelProps) {
-  const agent = useAgent();
-  const [state, dispatch] = useReducer(socialReducer, undefined, createInitialSocialState);
-  const [tab, setTab] = useState<Tab>(initialTab);
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
-  const [threadId, setThreadId] = useState<string>(initialThread && THREAD_IDS.includes(initialThread) ? initialThread : THREAD_IDS[0]);
-  const [drafts, setDrafts] = useState<Record<Field, string>>({ post: "", comment: "", message: "" });
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
-  /** Remounting the keyboard clears its internal text after a send. */
-  const [keyboardEpoch, setKeyboardEpoch] = useState(0);
-  const [customGoal, setCustomGoal] = useState("");
-
-  const feedRef = useRef<HTMLDivElement>(null);
-  const idCounterRef = useRef(0);
-  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const nextId = () => `local-${(idCounterRef.current += 1)}`;
-
-  const activeField: Field = tab === "messages" ? "message" : replyingTo ? "comment" : "post";
-  const agentBusy = agent.status === "running";
-
-  useGazeEdgeScroll(feedRef, tab === "feed");
+  useEffect(() => () => urls.current.forEach(URL.revokeObjectURL), []);
   useEffect(() => {
-    const timers = timersRef.current;
-    return () => timers.forEach(clearTimeout);
-  }, []);
+    if (!handsFree || lastBlink.current === gaze.blinkCount) return;
+    lastBlink.current = gaze.blinkCount;
+    const now = Date.now();
+    blinkTimes.current = [...blinkTimes.current.filter((t) => now - t < 1000), now];
+    if (blinkTimes.current.length >= 2) { blinkTimes.current = []; playLocalLaugh(); setStatus("Laugh sound played after a double blink."); }
+  }, [gaze.blinkCount, handsFree]);
 
-  const setDraft = useCallback((field: Field, text: string) => setDrafts((prev) => ({ ...prev, [field]: text })), []);
-  const handleKeyboardText = useCallback((text: string) => setDraft(activeField, text), [activeField, setDraft]);
-  const resetKeyboard = () => setKeyboardEpoch((epoch) => epoch + 1);
+  useEffect(() => {
+    if (!handsFree) { watch.current.el = null; edge.current = { side: "", at: 0, fired: false }; return; }
+    const tick = () => {
+      if (!gaze.isTracking || !gaze.isFaceDetected) { watch.current.el = null; setDwell(0); edge.current = { side: "", at: 0, fired: false }; return; }
+      const { x, y } = gaze.gazePositionRef.current;
+      const hit = document.elementFromPoint(x, y);
+      const el = hit instanceof HTMLElement ? hit.closest<HTMLElement>("[data-gaze-target]") : null;
+      if (el) {
+        edge.current = { side: "", at: 0, fired: false };
+        const w = watch.current, now = performance.now();
+        if (w.el !== el) watch.current = { el, at: now, x, y, fired: false };
+        else if (Math.hypot(x - w.x, y - w.y) > 34) { w.at = now; w.x = x; w.y = y; w.fired = false; }
+        const active = watch.current, ms = Math.max(450, Number(el.dataset.gazeDwellMs) || 900);
+        const elapsed = now - active.at;
+        setDwell(Math.min(100, elapsed / ms * 100));
+        if (elapsed >= ms && !active.fired) { active.fired = true; el.click(); }
+        return;
+      }
+      watch.current.el = null; setDwell(0);
+      if (mode !== "videos" || clips.length < 2 || !window.innerWidth) { edge.current = { side: "", at: 0, fired: false }; return; }
+      const pct = x / window.innerWidth, side = pct < .045 ? "prev" : pct > .955 ? "next" : "";
+      if (!side) { edge.current = { side: "", at: 0, fired: false }; return; }
+      const now = performance.now();
+      if (edge.current.side !== side) edge.current = { side, at: now, fired: false };
+      if (now - edge.current.at > 750 && !edge.current.fired) { edge.current.fired = true; step(side === "prev" ? -1 : 1); setStatus(side === "prev" ? "Previous video." : "Next video."); }
+    };
+    const timer = window.setInterval(tick, 50);
+    return () => window.clearInterval(timer);
+  }, [clips.length, gaze.gazePositionRef, gaze.isFaceDetected, gaze.isTracking, handsFree, mode, step]);
 
-  const publishPost = () => {
-    dispatch({ type: "add-post", body: drafts.post, id: nextId() });
-    setDraft("post", "");
-    resetKeyboard();
+  const toggleHandsFree = () => {
+    const next = !handsFree; setHandsFree(next); setDwell(0);
+    if (next && !gaze.isTracking) gaze.initialize();
   };
-
-  const sendComment = (postId: string) => {
-    dispatch({ type: "add-comment", postId, body: drafts.comment, id: nextId() });
-    setDraft("comment", "");
-    setReplyingTo(null);
-    resetKeyboard();
+  const addVideos = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.currentTarget.files ?? []).filter((file) => file.type.startsWith("video/"));
+    const next = files.map((file) => { const src = URL.createObjectURL(file); urls.current.add(src); return { id: `${file.name}-${file.lastModified}-${Math.random()}`, name: file.name, src, liked: false }; });
+    if (next.length) { setClips((old) => [...old, ...next]); setIndex(clips.length); setMode("videos"); setStatus(`${next.length} local video${next.length === 1 ? "" : "s"} added.`); }
+    event.currentTarget.value = "";
   };
-
-  const sendMessage = () => {
-    if (!drafts.message.trim()) return;
-    const friendId = threadId;
-    dispatch({ type: "send-message", friendId, from: ME, body: drafts.message, id: nextId() });
-    setDraft("message", "");
-    resetKeyboard();
-    const reply = AUTO_REPLIES[friendId] ?? DEFAULT_REPLY;
-    timersRef.current.push(
-      setTimeout(() => dispatch({ type: "send-message", friendId, from: friendId, body: reply, id: nextId() }), AUTO_REPLY_DELAY_MS),
-    );
+  const toggleLike = () => {
+    setClips((old) => old.map((clip, i) => i === index ? { ...clip, liked: !clip.liked } : clip));
+    setStatus(current?.liked ? "Like removed." : "Video liked.");
   };
+  const target = (id: string, extra = "") => ({ "data-gaze-target": id, className: extra });
 
-  const runCustomGoal = () => {
-    agent.run(customGoal);
-    setCustomGoal("");
-  };
-
-  const renderPost = (post: Post) => {
-    const author = friendById(post.authorId);
-    const replying = replyingTo === post.id;
-    return (
-      <article key={post.id} className={brutal.card}>
-        <header className="flex items-center gap-3">
-          <Avatar friendId={post.authorId} />
-          <div>
-            <p className="text-sm font-semibold">{author.name}</p>
-            <p className="text-xs text-[var(--iris-text-secondary)]">{post.timeAgo}</p>
-          </div>
-        </header>
-        <p className="mt-3 text-base leading-snug">{post.body}</p>
-
-        {post.comments.length > 0 && (
-          <ul className="mt-3 space-y-1.5 border-l-4 border-[var(--ink)]/20 pl-3">
-            {post.comments.map((comment) => (
-              <li key={comment.id} className="text-sm text-[var(--iris-text-secondary)]">
-                <span className="font-bold text-[var(--ink)]">{friendById(comment.authorId).name}</span> {comment.body}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="mt-3 flex items-center gap-2">
-          <GazeAction
-            id={`like-${post.id}`}
-            agentLabel={`${post.liked ? "Unlike" : "Like"} ${author.name}'s post: "${clip(post.body)}"`}
-            aria-pressed={post.liked}
-            onClick={() => dispatch({ type: "toggle-like", postId: post.id })}
-            className={`${ghostButton} ${post.liked ? "!bg-[var(--cat-pain)] !text-white" : ""}`}
-          >
-            {post.liked ? "♥ Liked" : "♡ Like"} · {post.likes}
-          </GazeAction>
-          <GazeAction
-            id={`reply-${post.id}`}
-            agentLabel={`Reply to ${author.name}'s post: "${clip(post.body)}"`}
-            onClick={() => setReplyingTo(replying ? null : post.id)}
-            className={ghostButton}
-          >
-            💬 Reply
-          </GazeAction>
-        </div>
-
-        {replying && (
-          <div className="mt-3 space-y-2">
-            <textarea
-              rows={2}
-              value={drafts.comment}
-              onChange={(event) => setDraft("comment", event.target.value)}
-              placeholder={`Reply to ${author.name}…`}
-              aria-label={`Reply to ${author.name}`}
-              data-agent-id="comment-input"
-              data-agent-label={`Reply text box for ${author.name}'s post`}
-              className={fieldClass}
-            />
-            <GazeAction
-              id="comment-send"
-              agentLabel="Send reply"
-              disabled={!drafts.comment.trim()}
-              onClick={() => sendComment(post.id)}
-              className={primaryButton}
-            >
-              Send reply
-            </GazeAction>
-          </div>
-        )}
-      </article>
-    );
-  };
-
-  const thread = state.threads[threadId] ?? [];
-
-  return (
-    <GazeSelectScope
-      modal
-      label="i-see Social"
-      className={brutal.panel}
-    >
-      <header className={brutal.header}>
-        <h2 className={brutal.title}>i-see Social</h2>
-        <nav className="flex gap-2" aria-label="Sections">
-          <GazeAction id="tab-feed" agentLabel="Open the Feed tab" aria-pressed={tab === "feed"} onClick={() => setTab("feed")}
-            className={`${ghostButton} ${tab === "feed" ? brutal.buttonActive : ""}`}>Feed</GazeAction>
-          <GazeAction id="tab-messages" agentLabel="Open the Messages tab" aria-pressed={tab === "messages"} onClick={() => setTab("messages")}
-            className={`${ghostButton} ${tab === "messages" ? brutal.buttonActive : ""}`}>Messages</GazeAction>
+  return <section aria-label="i-see social launchpad" className="fixed inset-0 z-[800] flex flex-col overflow-y-auto bg-[var(--iris-bg)] p-3 text-[var(--iris-text)] sm:p-6">
+    <header className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3 border-b-4 border-[var(--ink)] pb-4">
+      <div><p className="text-xs font-black uppercase tracking-[.2em] text-[var(--iris-text-secondary)]">IRIS · SOCIAL ACCESS</p><h1 className="text-2xl font-black sm:text-3xl">Stay connected, your way.</h1></div>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" {...target("hands-free", "rounded-lg border-2 border-[var(--ink)] bg-white px-4 py-2 text-sm font-bold shadow-[3px_3px_0_#2A0E3A]")} aria-pressed={handsFree} onClick={toggleHandsFree}>{handsFree ? "Hands-free on · turn off" : "Enable hands-free gaze"}</button>
+        {onClose && <button type="button" {...target("close", "rounded-lg border-2 border-[var(--ink)] px-4 py-2 font-bold")} onClick={onClose}>Close ×</button>}
+      </div>
+    </header>
+    <div className="mx-auto w-full max-w-5xl py-4">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <nav aria-label="Social modes" className="flex gap-2">
+          <button type="button" {...target("mode-links", `rounded-lg border-2 border-[var(--ink)] px-4 py-2 font-bold ${mode === "links" ? "bg-[var(--btn-purple)] text-white" : "bg-white"}`)} aria-pressed={mode === "links"} onClick={() => setMode("links")}>Social sites</button>
+          <button type="button" {...target("mode-videos", `rounded-lg border-2 border-[var(--ink)] px-4 py-2 font-bold ${mode === "videos" ? "bg-[var(--btn-purple)] text-white" : "bg-white"}`)} aria-pressed={mode === "videos"} onClick={() => setMode("videos")}>My video feed</button>
         </nav>
-        <div className="ml-auto flex gap-2">
-          <GazeAction id="toggle-keyboard" agent={false} aria-pressed={keyboardOpen} onClick={() => setKeyboardOpen((open) => !open)} className={ghostButton}>
-            {keyboardOpen ? "Hide gaze keyboard" : "Gaze keyboard"}
-          </GazeAction>
-          {onClose && (
-            <GazeAction id="close-social" agentLabel="Close i-see Social" onClick={onClose} className={ghostButton}>Close ✕</GazeAction>
-          )}
+        <p className="text-sm font-semibold" aria-live="polite">{gaze.isTracking && gaze.isFaceDetected ? "Gaze tracking ready" : handsFree ? "Looking for your gaze…" : "Gaze controls are off"}</p>
+      </div>
+      {mode === "links" ? <div className="grid gap-5 md:grid-cols-[2fr_1fr]">
+        <section className="rounded-2xl border-4 border-[var(--ink)] bg-white p-5 shadow-[4px_4px_0_#2A0E3A]">
+          <h2 className="mb-1 text-xl font-black">Open a social network</h2><p className="mb-5 text-sm text-[var(--iris-text-secondary)]">These buttons open the real services in a new tab. Sign in there to view your own feed and messages.</p>
+          <div className="grid gap-3 sm:grid-cols-3">{SITES.map((site) => <a key={site.name} {...target(`site-${site.name}`)} href={site.url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${site.name} in a new tab`} className="flex min-h-28 flex-col items-center justify-center gap-2 rounded-xl border-2 border-[var(--ink)] p-4 font-black shadow-[3px_3px_0_#2A0E3A] hover:-translate-y-0.5" style={{ color: site.color }}><Logo name={site.name} /><span>{site.name}</span></a>)}</div>
+        </section>
+        <section className="flex flex-col items-center justify-center gap-3 rounded-2xl border-4 border-[var(--ink)] bg-[#FFF1B8] p-5 text-center shadow-[4px_4px_0_#2A0E3A]">
+          <h2 className="text-xl font-black">Share a laugh</h2><p className="text-sm">Tap or dwell to play a short, locally generated laugh sound.</p>
+          <button type="button" {...target("laugh", "flex min-h-24 min-w-40 items-center justify-center gap-3 rounded-xl border-2 border-[var(--ink)] bg-white px-5 py-4 text-lg font-black shadow-[3px_3px_0_#2A0E3A]")} onClick={() => { playLocalLaugh(); setStatus("Laugh sound played."); }}><span aria-hidden="true" className="text-4xl">😂</span>Laugh</button>
+          <p className="text-xs">Hands-free: enable gaze and double-blink, or dwell on Laugh.</p>
+        </section>
+      </div> : <section className="rounded-2xl border-4 border-[var(--ink)] bg-white p-5 shadow-[4px_4px_0_#2A0E3A]">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-black">Your local video feed</h2><p className="text-sm text-[var(--iris-text-secondary)]">Only videos you choose are shown. Nothing is pre-filled or uploaded.</p></div>
+          <label className="cursor-pointer rounded-lg border-2 border-[var(--ink)] bg-[#E6F6F1] px-4 py-2 font-bold shadow-[3px_3px_0_#2A0E3A]">Add videos from this device<input className="sr-only" type="file" accept="video/*" multiple onChange={addVideos} /></label>
         </div>
-      </header>
-
-      {showAgentBar && (
-      <section aria-label="Ask i-see to do something" className="border-b-4 border-[var(--ink)] bg-[var(--cat-entertainment)]/15 px-5 py-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <p className={brutal.label}>Ask i-see to…</p>
-          <span className="flex gap-2" role="group" aria-label="Where the agent works">
-            {([["browser", "Real browser"], ["inapp", "In this app"]] as const).map(([value, label]) => (
-              <GazeAction key={value} id={`agent-mode-${value}`} agent={false} aria-pressed={agent.mode === value}
-                disabled={agentBusy} onClick={() => agent.setMode(value)}
-                className={`${brutal.chip} !px-3 !py-1 text-xs ${agent.mode === value ? brutal.buttonActive : ""}`}>
-                {label}
-              </GazeAction>
-            ))}
-          </span>
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          {AGENT_PRESETS.map((goal) => (
-            <GazeAction key={goal} id={`intent-${goal}`} agent={false} disabled={agentBusy} onClick={() => agent.run(goal)}
-              className={brutal.chip}>
-              {goal}
-            </GazeAction>
-          ))}
-          <input
-            value={customGoal}
-            onChange={(event) => setCustomGoal(event.target.value)}
-            onKeyDown={(event) => { if (event.key === "Enter" && customGoal.trim() && !agentBusy) { event.stopPropagation(); runCustomGoal(); } }}
-            placeholder="…or type any request"
-            aria-label="Custom request for i-see"
-            className={`${brutal.field} min-w-[14rem] flex-1 !rounded-full !py-2`}
-          />
-          <GazeAction id="run-custom" agent={false} disabled={agentBusy || !customGoal.trim()} onClick={runCustomGoal}
-            className={brutal.buttonPrimary}>Run</GazeAction>
-        </div>
-      </section>
-      )}
-
-      {tab === "feed" ? (
-        <div ref={feedRef} {...{ [AGENT_SCROLL_ATTRIBUTE]: "" }} className="mx-auto min-h-0 w-full max-w-2xl flex-1 space-y-3 overflow-y-auto px-5 py-4">
-          <section className={`space-y-2 ${brutal.card}`}>
-            <textarea
-              rows={2}
-              value={replyingTo ? "" : drafts.post}
-              disabled={Boolean(replyingTo)}
-              onChange={(event) => setDraft("post", event.target.value)}
-              placeholder="Share something with your friends…"
-              aria-label="New post"
-              data-agent-id="post-input"
-              data-agent-label="New post text box"
-              className={fieldClass}
-            />
-            <GazeAction id="post-send" agentLabel="Publish the post" disabled={!drafts.post.trim()} onClick={publishPost} className={primaryButton}>
-              Post
-            </GazeAction>
-          </section>
-          {state.posts.map(renderPost)}
-        </div>
-      ) : (
-        <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-3 px-5 py-4">
-          <div className="flex gap-2">
-            {THREAD_IDS.map((friendId) => (
-              <GazeAction key={friendId} id={`thread-${friendId}`} agentLabel={`Open the conversation with ${friendById(friendId).name}`}
-                aria-pressed={threadId === friendId} onClick={() => setThreadId(friendId)}
-                className={`${ghostButton} ${threadId === friendId ? brutal.buttonActive : ""}`}>
-                {friendById(friendId).name}
-              </GazeAction>
-            ))}
+        {current ? <div className="mx-auto max-w-2xl">
+          <div className="relative overflow-hidden rounded-xl border-2 border-[var(--ink)] bg-black"><video key={current.id} src={current.src} controls playsInline className="max-h-[55vh] w-full" aria-label={current.name} />
+            <button type="button" {...target("like-video", "absolute right-3 top-3 rounded-full border-2 border-white bg-black/70 px-4 py-2 text-lg font-black text-white")} data-gaze-dwell-ms="1600" aria-pressed={current.liked} onClick={toggleLike}>{current.liked ? "♥ Liked" : "♡ Like"}</button>
           </div>
-          <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto rounded-2xl border-[3px] border-[var(--ink)] bg-white p-4 shadow-[4px_4px_0_var(--ink)]" aria-label={`Conversation with ${friendById(threadId).name}`}>
-            {thread.length === 0 && <li className="text-sm font-semibold text-[var(--iris-text-secondary)]">No messages yet. Say hello!</li>}
-            {thread.map((message) => (
-              <li key={message.id} className={`flex ${message.from === ME ? "justify-end" : "justify-start"}`}>
-                <span className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${message.from === ME ? "border-2 border-[var(--ink)] bg-[var(--btn-purple)] text-white" : "border-2 border-[var(--ink)] bg-[var(--iris-surface-raised)]"}`}>{message.body}</span>
-              </li>
-            ))}
-          </ul>
-          <textarea
-            rows={2}
-            value={drafts.message}
-            onChange={(event) => setDraft("message", event.target.value)}
-            placeholder={`Message ${friendById(threadId).name}…`}
-            aria-label={`Message ${friendById(threadId).name}`}
-            data-agent-id="message-input"
-            data-agent-label={`Message text box for ${friendById(threadId).name}`}
-            className={fieldClass}
-          />
-          <GazeAction id="message-send" agentLabel="Send the message" disabled={!drafts.message.trim()} onClick={sendMessage} className={primaryButton}>
-            Send
-          </GazeAction>
-        </div>
-      )}
-
-      {keyboardOpen && (
-        <div className="max-h-[45vh] overflow-y-auto border-t-4 border-[var(--ink)] bg-white">
-          <MindReaderKeyboard key={`${keyboardEpoch}-${activeField}`} onTextChange={handleKeyboardText} />
-        </div>
-      )}
-    </GazeSelectScope>
-  );
+          <div className="mt-3 flex items-center justify-between gap-2"><button type="button" {...target("previous-video", "rounded-lg border-2 border-[var(--ink)] px-4 py-2 font-bold")} disabled={index === 0} onClick={() => step(-1)}>← Previous</button><p className="min-w-0 flex-1 truncate text-center text-sm font-bold">{index + 1} / {clips.length} · {current.name}</p><button type="button" {...target("next-video", "rounded-lg border-2 border-[var(--ink)] px-4 py-2 font-bold")} disabled={index >= clips.length - 1} onClick={() => step(1)}>Next →</button></div>
+          <p className="mt-3 text-center text-xs text-[var(--iris-text-secondary)]">Hold gaze at a screen edge for 0.75s to move between videos. Dwell on Like for 1.6s.</p>
+        </div> : <div className="rounded-xl border-2 border-dashed border-[var(--ink)] p-10 text-center"><p className="text-lg font-bold">Your feed is empty</p><p className="mt-1 text-sm text-[var(--iris-text-secondary)]">Add one or more video files from this device to begin. No example posts or videos are shown.</p></div>}
+      </section>}
+    </div>
+    <footer className="mx-auto mt-auto w-full max-w-5xl border-t-2 border-[var(--ink)]/20 pt-3 text-sm" aria-live="polite">
+      {handsFree && <p className="mb-2">{gaze.isTracking ? "Hands-free on: stable gaze dwell selects controls." : "Allow camera access to use gaze controls."} Double-blink plays the laugh sound. {mode === "videos" && clips.length > 1 ? "Hold left/right screen edge to navigate." : ""}</p>}
+      {dwell > 0 && <div className="mb-2 h-2 max-w-xs overflow-hidden rounded-full bg-black/10" aria-label={`Dwell progress ${Math.round(dwell)}%`}><div className="h-full bg-[var(--iris-accent)] transition-[width]" style={{ width: `${dwell}%` }} /></div>}{status}
+    </footer>
+  </section>;
 }
