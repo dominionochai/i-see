@@ -1,0 +1,9 @@
+{
+  "name": "i-see-vision-lambda",
+  "version": "1.0.0",
+  "description": "Serverless vision-identify endpoint for I-See (same logic as src/app/api/vision/identify/route.ts)",
+  "main": "handler.mjs",
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "dependencies": {}
+}
