@@ -231,9 +231,12 @@ export function GazeButton({
 
   const handleClick = () => {
     if (isDebugMode && !dataDisabled) {
-      triggerAction();
       setJustSelected(true);
-      setTimeout(() => setJustSelected(false), 600);
+      try {
+        triggerAction();
+      } finally {
+        setTimeout(() => setJustSelected(false), 600);
+      }
     }
   };
 
@@ -296,4 +299,3 @@ export function GazeButton({
     </div>
   );
 }
-

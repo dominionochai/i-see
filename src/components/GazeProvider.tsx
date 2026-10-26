@@ -1,281 +1,373 @@
-"use client";
+'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import {
+  useCallback, useEffect, useRef, useState,
+  type MutableRefObject, type ReactNode,
+} from 'react';
+import type { FaceLandmarker } from '@mediapipe/tasks-vision';
+import {
+  GazeContext, type GazePosition, type GazeState, type HoverState, type TrackingOverlay,
+} from '@/lib/gazeContext';
+import { CalibrationManager, CALIBRATION_TARGETS, type GazeCalibration } from '@/lib/calibration';
+import { HomographyCalibration } from '@/lib/homographyCalibration';
+import { OneEuroSmooth } from '@/lib/oneEuroSmooth';
+import { loadOpenCv } from '@/lib/opencvVision';
+import { BlinkDetector } from '@/lib/blinkDetector';
+import { EMASmooth, type GazeSmoother } from '@/lib/emaSmooth';
+import {
+  estimateRawGaze, IRIS_LEFT, IRIS_RIGHT, LEFT_EAR_IDX, RIGHT_EAR_IDX, type NormalizedLandmark,
+} from '@/lib/gazeEstimator';
 
-export type GazePoint = { x: number; y: number };
-export type GazeStatus = "idle" | "starting" | "ready" | "error";
+// The WASM runtime must match the installed npm package exactly. package.json
+// pins @mediapipe/tasks-vision to this version; bump both together.
+const MEDIAPIPE_VERSION = '0.10.35';
+const WASM_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
+const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 
-export interface GazeContextValue {
-  stream: MediaStream | null;
-  gaze: GazePoint | null;
-  blinkCount: number;
-  status: GazeStatus;
-  startGaze: () => Promise<void>;
-  stopGaze: () => void;
-  startCalibration: () => void;
-}
+/** Lower = steadier cursor but more lag. */
+const GAZE_SMOOTHING_ALPHA = 0.12;
+/** Pixels the arrow keys move the cursor (accessibility / demo fallback). */
+const KEYBOARD_NUDGE_PX = 32;
+/** Normalized jump (>60% of the eye range) means the tracker lost and re-acquired the eye. */
+const TELEPORT_JUMP = 0.6;
+/** Mid-range jumps are eased toward the previous position instead of followed instantly. */
+const SPIKE_JUMP = 0.35;
 
-interface GazeProviderProps {
-  children: ReactNode;
-  autoStart?: boolean;
-  smoothingFactor?: number;
-  deadZone?: number;
-}
+/** MediaPipe's face mesh has 468 face points plus 10 iris points. */
+const LANDMARK_COUNT = 478;
+const NO_OVERLAY: TrackingOverlay = { eyes: [], landmarks: null };
 
-const WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
-const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
-const BLINK_EAR_THRESHOLD = 0.19;
-const BLINK_EAR_RELEASE = 0.24;
-const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+type ReactiveState = Pick<
+  GazeState,
+  | 'blinkCount' | 'isFaceDetected' | 'isCalibrated' | 'isTracking' | 'isCalibrating'
+  | 'calibrationStep' | 'initStatus' | 'errorMessage' | 'isWebGPU' | 'calibrationModel' | 'stream'
+>;
 
-function averageLandmarks(landmarks: Array<{ x: number; y: number }>, indices: number[]): GazePoint {
-  const points = indices.map((index) => landmarks[index]);
+const INITIAL_STATE: ReactiveState = {
+  blinkCount: 0,
+  isFaceDetected: false,
+  isCalibrated: false,
+  isTracking: false,
+  isCalibrating: false,
+  calibrationStep: 0,
+  initStatus: 'idle',
+  errorMessage: '',
+  isWebGPU: false,
+  calibrationModel: 'affine',
+  stream: null,
+};
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+const isEditableTarget = (target: EventTarget | null) => {
+  const element = target as HTMLElement | null;
+  return Boolean(element && (element.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName)));
+};
+
+function buildOverlay(landmarks: NormalizedLandmark[], buffer: Float32Array): TrackingOverlay {
+  const eye = (earIndices: number[], irisIndex: number) => ({
+    contour: earIndices.map((index) => ({ x: landmarks[index].x, y: landmarks[index].y })),
+    iris: { x: landmarks[irisIndex].x, y: landmarks[irisIndex].y },
+  });
+  const count = Math.min(landmarks.length, LANDMARK_COUNT);
+  for (let i = 0; i < count; i += 1) {
+    buffer[2 * i] = landmarks[i].x;
+    buffer[2 * i + 1] = landmarks[i].y;
+  }
   return {
-    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
-    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
+    eyes: [eye(LEFT_EAR_IDX, IRIS_LEFT), eye(RIGHT_EAR_IDX, IRIS_RIGHT)],
+    landmarks: buffer,
   };
 }
 
-function distance2d(a: { x: number; y: number }, b: { x: number; y: number }): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+/**
+ * MediaPipe's WASM runtime writes INFO/WARN lines through console.error, which
+ * the Next.js dev overlay would surface as errors. Returns a function that
+ * restores the original console.
+ */
+function silenceMediaPipeLogs(): () => void {
+  const original = console.error;
+  const isMediaPipeLog = (message: unknown) =>
+    typeof message === 'string' && (
+      /^[IWEF]\d{4} \d{2}:\d{2}:\d{2}\.\d{6}/.test(message) ||
+      /TensorFlow Lite XNNPACK delegate|OpenGL error checking is disabled|xnnpack/.test(message)
+    );
+  console.error = (...args: unknown[]) => {
+    if (!isMediaPipeLog(args[0])) original.apply(console, args);
+  };
+  return () => { console.error = original; };
 }
 
-const GazeContext = createContext<GazeContextValue | null>(null);
-
-export function useGaze(): GazeContextValue {
-  const value = useContext(GazeContext);
-  if (!value) throw new Error("useGaze must be used inside a GazeProvider.");
-  return value;
-}
-
-export function GazeProvider({ children, autoStart = false, smoothingFactor = 0.4, deadZone = 0.008 }: GazeProviderProps) {
-  const [stream, setStream] = useState<MediaStream | null>(null);
-  const [gaze, setGaze] = useState<GazePoint | null>(null);
-  const [blinkCount, setBlinkCount] = useState(0);
-  const [status, setStatus] = useState<GazeStatus>("idle");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+export function GazeProvider({ children, autoStart = false }: { children: ReactNode; autoStart?: boolean }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
   const landmarkerRef = useRef<FaceLandmarker | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const generationRef = useRef(0);
-  const startInProgressRef = useRef(false);
-  const mountedRef = useRef(false);
-  const gazeRef = useRef<GazePoint | null>(null);
-  const rawGazeRef = useRef<GazePoint | null>(null);
-  const calibrationOffsetRef = useRef<GazePoint>({ x: 0, y: 0 });
-  const blinkClosedRef = useRef(false);
+  const streamRef = useRef<MediaStream | null>(null);
+  const rafRef = useRef(0);
+  const initializingRef = useRef(false);
+  // Start with dependency-free models; OpenCV's replace them once it has loaded (see below).
+  const calibrationRef = useRef<GazeCalibration>(new CalibrationManager());
+  const smootherRef = useRef<GazeSmoother>(new EMASmooth(GAZE_SMOOTHING_ALPHA));
+  const blinkDetectorRef = useRef<BlinkDetector | null>(null);
 
-  const releaseResources = useCallback(() => {
-    if (animationFrameRef.current !== null) {
-      window.cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    const activeStream = streamRef.current;
-    streamRef.current = null;
-    if (videoRef.current) {
-      videoRef.current.pause();
-      if (videoRef.current.srcObject === activeStream) videoRef.current.srcObject = null;
-    }
-    activeStream?.getTracks().forEach((track) => track.stop());
-    const activeLandmarker = landmarkerRef.current;
-    landmarkerRef.current = null;
-    try {
-      activeLandmarker?.close();
-    } catch {
-      // The landmarker may already have been closed while an async start was cancelled.
-    }
-    if (mountedRef.current) setStream(null);
+  // High-frequency values live in refs so per-frame updates never re-render.
+  const gazePositionRef = useRef<GazePosition>({ x: 0.5, y: 0.5 });
+  const rawIrisRef = useRef<GazePosition>({ x: 0.5, y: 0.5 }) as MutableRefObject<GazePosition>;
+  // Last accepted raw estimate; rejects teleport frames where the tracker
+  // lost and re-acquired the eye (glare, blink, quick turn). Kept across
+  // face loss so a re-acquire never jumps straight to a new position.
+  const prevRawRef = useRef<GazePosition | null>(null);
+  const overlayRef = useRef<TrackingOverlay>(NO_OVERLAY);
+  const landmarkBufferRef = useRef(new Float32Array(LANDMARK_COUNT * 2));
+  const hoverStateRef = useRef<HoverState>({ isHovering: false, dwellPct: 0 });
+
+  const [state, setState] = useState<ReactiveState>(INITIAL_STATE);
+
+  useEffect(() => {
+    blinkDetectorRef.current = new BlinkDetector(() => {
+      setState((prev) => ({ ...prev, blinkCount: prev.blinkCount + 1 }));
+    });
+    return () => { blinkDetectorRef.current = null; };
   }, []);
 
-  const stopGaze = useCallback(() => {
-    generationRef.current += 1;
-    startInProgressRef.current = false;
-    releaseResources();
-    gazeRef.current = null;
-    rawGazeRef.current = null;
-    calibrationOffsetRef.current = { x: 0, y: 0 };
-    blinkClosedRef.current = false;
-    if (mountedRef.current) {
-      setGaze(null);
-      setStatus("idle");
-      setErrorMessage(null);
-    }
-  }, [releaseResources]);
-
-  const startGaze = useCallback(async () => {
-    if (startInProgressRef.current || streamRef.current) return;
-    startInProgressRef.current = true;
-    const generation = ++generationRef.current;
-    if (mountedRef.current) {
-      setStatus("starting");
-      setErrorMessage(null);
-    }
-
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error("Camera access is unavailable in this browser or page context.");
-      }
-      const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      if (generation !== generationRef.current) {
-        cameraStream.getTracks().forEach((track) => track.stop());
-        return;
-      }
-      streamRef.current = cameraStream;
-      if (mountedRef.current) setStream(cameraStream);
-
-      const video = videoRef.current;
-      if (!video) throw new Error("The gaze tracking video element is not available.");
-      video.srcObject = cameraStream;
-      await video.play();
-
-      const fileset = await FilesetResolver.forVisionTasks(WASM_URL);
-      const landmarker = await FaceLandmarker.createFromOptions(fileset, {
-        baseOptions: { modelAssetPath: MODEL_URL, delegate: "CPU" },
-        runningMode: "VIDEO",
-        numFaces: 1,
-      });
-      if (generation !== generationRef.current) {
-        landmarker.close();
-        cameraStream.getTracks().forEach((track) => track.stop());
-        return;
-      }
-      landmarkerRef.current = landmarker;
-      if (mountedRef.current) setStatus("ready");
-
-      let lastVideoTime = -1;
-      const detectFrame = () => {
-        if (generation !== generationRef.current) return;
-        const currentVideo = videoRef.current;
-        if (currentVideo && currentVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && currentVideo.videoWidth > 0 && currentVideo.currentTime !== lastVideoTime) {
-          try {
-            const result = landmarker.detectForVideo(currentVideo, performance.now());
-            lastVideoTime = currentVideo.currentTime;
-            const landmarks = result.faceLandmarks?.[0];
-            // No face or incomplete landmarks means retaining the last stable gaze point.
-            if (landmarks && landmarks.length > 477) {
-              const leftIris = averageLandmarks(landmarks, [468, 469, 470, 471, 472]);
-              const rightIris = averageLandmarks(landmarks, [473, 474, 475, 476, 477]);
-              const raw = {
-                x: clamp01(1 - (leftIris.x + rightIris.x) / 2),
-                y: clamp01((leftIris.y + rightIris.y) / 2),
-              };
-              rawGazeRef.current = raw;
-              const target = {
-                x: clamp01(raw.x - calibrationOffsetRef.current.x),
-                y: clamp01(raw.y - calibrationOffsetRef.current.y),
-              };
-              const previous = gazeRef.current;
-              const factor = Math.max(0, Math.min(1, smoothingFactor));
-              const zone = Math.max(0, deadZone);
-              let next = target;
-              if (previous) {
-                const dx = target.x - previous.x;
-                const dy = target.y - previous.y;
-                if (Math.abs(dx) <= zone && Math.abs(dy) <= zone) {
-                  next = previous;
-                } else {
-                  next = { x: clamp01(previous.x + dx * factor), y: clamp01(previous.y + dy * factor) };
-                }
-              }
-              if (next !== previous) {
-                gazeRef.current = next;
-                if (mountedRef.current) setGaze(next);
-              }
-
-              // EAR uses the requested upper/lower eyelid landmarks and eye-corner widths.
-              const leftWidth = distance2d(landmarks[33], landmarks[133]);
-              const rightWidth = distance2d(landmarks[362], landmarks[263]);
-              if (leftWidth > 0 && rightWidth > 0) {
-                const leftEar = (2 * distance2d(landmarks[159], landmarks[145])) / leftWidth;
-                const rightEar = (2 * distance2d(landmarks[386], landmarks[374])) / rightWidth;
-                const ear = (leftEar + rightEar) / 2;
-                if (ear < BLINK_EAR_THRESHOLD && !blinkClosedRef.current) {
-                  blinkClosedRef.current = true;
-                  if (mountedRef.current) setBlinkCount((count) => count + 1);
-                } else if (ear > BLINK_EAR_RELEASE) {
-                  blinkClosedRef.current = false;
-                }
-              }
-            }
-          } catch (error) {
-            if (generation === generationRef.current) {
-              releaseResources();
-              startInProgressRef.current = false;
-              const message = error instanceof Error ? error.message : "Face landmark detection failed.";
-              if (mountedRef.current) {
-                setStatus("error");
-                setErrorMessage(message);
-              }
-            }
-            return;
-          }
+  // Upgrade to OpenCV's projective calibration and the adaptive 1-Euro smoother as soon as OpenCV.js is ready.
+  useEffect(() => {
+    let cancelled = false;
+    loadOpenCv()
+      .then((cv) => {
+        if (cancelled) return;
+        // Never swap models under a calibration that is already under way.
+        if (calibrationRef.current.sampleCount === 0 && !calibrationRef.current.isReady) {
+          calibrationRef.current = new HomographyCalibration(cv);
+          setState((prev) => ({ ...prev, calibrationModel: 'homography' }));
         }
-        animationFrameRef.current = window.requestAnimationFrame(detectFrame);
+        smootherRef.current = new OneEuroSmooth();
+      })
+      .catch((error: unknown) => console.warn('OpenCV unavailable; using the basic calibration and smoothing.', error));
+    return () => { cancelled = true; };
+  }, []);
+
+  const setFaceDetected = useCallback((detected: boolean) => {
+    // Returning `prev` keeps React from re-rendering on unchanged frames.
+    setState((prev) => (prev.isFaceDetected === detected ? prev : { ...prev, isFaceDetected: detected }));
+  }, []);
+
+  const processFrame = useCallback((video: HTMLVideoElement, landmarker: FaceLandmarker, timestamp: number) => {
+    const landmarks = landmarker.detectForVideo(video, timestamp).faceLandmarks[0];
+    if (!landmarks) {
+      overlayRef.current = NO_OVERLAY;
+      setFaceDetected(false);
+      return;
+    }
+
+    const isBlinking = blinkDetectorRef.current?.update(landmarks) ?? false;
+    // Hold the cursor while the lids are closed: iris landmarks swing downward mid-blink.
+    const raw = isBlinking ? null : estimateRawGaze(landmarks);
+    if (raw) {
+      // Teleport guard: a >0.6 normalized jump means the eye was lost and
+      // re-acquired. Skip the frame and hold the last good position.
+      const prev = prevRawRef.current;
+      if (prev && (Math.abs(raw.x - prev.x) > TELEPORT_JUMP || Math.abs(raw.y - prev.y) > TELEPORT_JUMP)) {
+        prevRawRef.current = raw; // resync so a real re-acquire is never locked out
+        overlayRef.current = buildOverlay(landmarks, landmarkBufferRef.current);
+        setFaceDetected(true);
+        return;
+      }
+      // Spike guard: mid-range jumps (glare flicker, motion blur) are eased
+      // toward the last accepted position instead of followed instantly, so
+      // the cursor never snaps across the screen on a single bad frame.
+      if (prev && (Math.abs(raw.x - prev.x) > SPIKE_JUMP || Math.abs(raw.y - prev.y) > SPIKE_JUMP)) {
+        raw.x = prev.x + (raw.x - prev.x) * 0.3;
+        raw.y = prev.y + (raw.y - prev.y) * 0.3;
+      }
+      prevRawRef.current = raw;
+      rawIrisRef.current = raw;
+      const target = calibrationRef.current.apply(raw.x, raw.y)
+        ?? { x: raw.x * window.innerWidth, y: raw.y * window.innerHeight };
+      const smoothed = smootherRef.current.update(target.x, target.y);
+      gazePositionRef.current = {
+        x: clamp(smoothed.x, 0, window.innerWidth),
+        y: clamp(smoothed.y, 0, window.innerHeight),
       };
-      animationFrameRef.current = window.requestAnimationFrame(detectFrame);
-    } catch (error) {
-      if (generation === generationRef.current) {
-        releaseResources();
-        startInProgressRef.current = false;
-        const message = error instanceof Error ? error.message : "Unable to start gaze tracking.";
-        if (mountedRef.current) {
-          setStatus("error");
-          setErrorMessage(message);
-        }
-      }
-    } finally {
-      if (generation === generationRef.current) startInProgressRef.current = false;
     }
-  }, [deadZone, releaseResources, smoothingFactor]);
+    overlayRef.current = buildOverlay(landmarks, landmarkBufferRef.current);
+    setFaceDetected(true);
+  }, [setFaceDetected]);
+
+  const startLoop = useCallback(() => {
+    let lastVideoTime = -1;
+    let lastTimestamp = -1;
+    let stillAlive = 0;
+
+    const tick = () => {
+      stillAlive += 1;
+      // If MediaPipe stops producing landmarks the loop can spin hot without
+      // ever yielding progress; bail out and let initialize() restart it.
+      if (stillAlive > 120) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+        return;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+      const video = videoRef.current;
+      const landmarker = landmarkerRef.current;
+      if (!video || !landmarker || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      if (video.currentTime === lastVideoTime) {
+        stillAlive += 1;
+        return; // no new camera frame yet
+      }
+      lastVideoTime = video.currentTime;
+      stillAlive = 0;
+
+      // MediaPipe requires strictly increasing timestamps.
+      lastTimestamp = Math.max(performance.now(), lastTimestamp + 1);
+      processFrame(video, landmarker, lastTimestamp);
+    };
+
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(tick);
+  }, [processFrame]);
+
+  const initialize = useCallback(() => {
+    if (initializingRef.current || streamRef.current) return;
+    initializingRef.current = true;
+
+    const fail = (message: string) =>
+      setState((prev) => ({ ...prev, initStatus: 'error', isTracking: false, errorMessage: message }));
+    const restoreConsole = silenceMediaPipeLogs();
+
+    (async () => {
+      setState((prev) => ({ ...prev, initStatus: 'loading-model', errorMessage: '' }));
+
+      try {
+        const { FaceLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
+        const fileset = await FilesetResolver.forVisionTasks(WASM_URL);
+        landmarkerRef.current = await FaceLandmarker.createFromOptions(fileset, {
+          baseOptions: { modelAssetPath: MODEL_URL, delegate: 'CPU' },
+          runningMode: 'VIDEO',
+          numFaces: 1,
+          outputFaceBlendshapes: false,
+          outputFacialTransformationMatrixes: false,
+        });
+      } catch (error) {
+        fail(`Failed to load the face model: ${error instanceof Error ? error.message : String(error)}`);
+        return;
+      }
+
+      setState((prev) => ({ ...prev, initStatus: 'requesting-camera' }));
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false,
+        });
+        streamRef.current = stream;
+        const video = videoRef.current;
+        if (!video) throw new Error('Camera video element was not mounted.');
+        video.srcObject = stream;
+        await video.play();
+        setState((prev) => ({ ...prev, isTracking: true, initStatus: 'ready', stream }));
+        startLoop();
+      } catch {
+        fail('Camera access denied. Please allow camera permission and reload.');
+      }
+    })().finally(() => {
+      restoreConsole();
+      initializingRef.current = false;
+    });
+  }, [startLoop]);
+
+  useEffect(() => {
+    if (autoStart) initialize();
+  }, [autoStart, initialize]);
+
+  useEffect(() => () => {
+    cancelAnimationFrame(rafRef.current);
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    landmarkerRef.current?.close();
+    landmarkerRef.current = null;
+  }, []);
 
   const startCalibration = useCallback(() => {
-    calibrationOffsetRef.current = rawGazeRef.current
-      ? { x: rawGazeRef.current.x - 0.5, y: rawGazeRef.current.y - 0.5 }
-      : { x: 0, y: 0 };
-    gazeRef.current = rawGazeRef.current ? { x: 0.5, y: 0.5 } : null;
-    if (mountedRef.current) setGaze(gazeRef.current);
-    if (!streamRef.current && !startInProgressRef.current) void startGaze();
-  }, [startGaze]);
+    calibrationRef.current.reset();
+    smootherRef.current.reset();
+    setState((prev) => ({ ...prev, isCalibrating: true, isCalibrated: false, calibrationStep: 0 }));
+  }, []);
 
+  const recordCalibrationPoint = useCallback(() => {
+    setState((prev) => {
+      const target = CALIBRATION_TARGETS[prev.calibrationStep];
+      if (!prev.isCalibrating || !target) return prev;
+
+      calibrationRef.current.addSample({
+        screenX: target.x * window.innerWidth,
+        screenY: target.y * window.innerHeight,
+        irisX: rawIrisRef.current.x,
+        irisY: rawIrisRef.current.y,
+      });
+
+      const nextStep = prev.calibrationStep + 1;
+      return nextStep >= CALIBRATION_TARGETS.length
+        ? { ...prev, isCalibrating: false, calibrationStep: 0, isCalibrated: calibrationRef.current.isReady }
+        : { ...prev, calibrationStep: nextStep };
+    });
+  }, []);
+
+  const resetCalibration = useCallback(() => {
+    calibrationRef.current.reset();
+    smootherRef.current.reset();
+    setState((prev) => ({ ...prev, isCalibrated: false, isCalibrating: false, calibrationStep: 0 }));
+  }, []);
+
+  // Keyboard fallback: arrows nudge the cursor, Enter/Space act as a blink.
   useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      generationRef.current += 1;
-      startInProgressRef.current = false;
-      releaseResources();
+    const nudges: Record<string, GazePosition> = {
+      ArrowLeft: { x: -KEYBOARD_NUDGE_PX, y: 0 },
+      ArrowRight: { x: KEYBOARD_NUDGE_PX, y: 0 },
+      ArrowUp: { x: 0, y: -KEYBOARD_NUDGE_PX },
+      ArrowDown: { x: 0, y: KEYBOARD_NUDGE_PX },
     };
-  }, [releaseResources]);
-
-  useEffect(() => {
-    if (autoStart) void startGaze();
-  }, [autoStart, startGaze]);
-
-  const value = useMemo<GazeContextValue>(
-    () => ({ stream, gaze, blinkCount, status, startGaze, stopGaze, startCalibration }),
-    [stream, gaze, blinkCount, status, startGaze, stopGaze, startCalibration],
-  );
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isEditableTarget(event.target)) return;
+      const nudge = nudges[event.key];
+      if (nudge) {
+        event.preventDefault();
+        const { x, y } = gazePositionRef.current;
+        gazePositionRef.current = {
+          x: clamp(x + nudge.x, 0, window.innerWidth),
+          y: clamp(y + nudge.y, 0, window.innerHeight),
+        };
+      } else if ((event.key === 'Enter' || event.code === 'Space') && !event.repeat) {
+        event.preventDefault();
+        setState((prev) => ({ ...prev, blinkCount: prev.blinkCount + 1 }));
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   return (
-    <GazeContext.Provider value={value}>
+    <GazeContext.Provider
+      value={{
+        ...state,
+        gazePositionRef,
+        rawIrisRef,
+        overlayRef,
+        hoverStateRef,
+        initialize,
+        startCalibration,
+        recordCalibrationPoint,
+        resetCalibration,
+      }}
+    >
+      {children}
       <video
         ref={videoRef}
-        autoPlay
         muted
         playsInline
+        autoPlay
         aria-hidden="true"
-        tabIndex={-1}
-        style={{ position: "fixed", width: 1, height: 1, opacity: 0, pointerEvents: "none", left: -2, top: -2 }}
+        style={{ position: 'fixed', top: -9999, left: -9999, width: 640, height: 480, opacity: 0, pointerEvents: 'none' }}
       />
-      {children}
-      {status === "error" && errorMessage && (
-        <p role="alert" className="fixed bottom-3 left-3 right-3 z-[1000] mx-auto max-w-xl rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 shadow-lg">
-          Gaze tracking error: {errorMessage}
-        </p>
-      )}
     </GazeContext.Provider>
   );
 }
