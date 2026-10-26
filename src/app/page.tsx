@@ -1,183 +1,90 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useIrisStore } from "@/store/useIrisStore";
-import { GridUI } from "@/components/GridUI";
-import { NodeBuilder } from "@/components/NodeBuilder";
-import { useWhisperMic } from "@/hooks/useWhisperMic";
-import { GazeProvider } from "@/components/GazeProvider";
-import { useGaze } from "@/lib/gazeContext";
-import { GazeCursor } from "@/components/GazeCursor";
-import { CalibrationOverlay } from "@/components/CalibrationOverlay";
-import { LandingPage } from "@/components/LandingPage";
-import { EyeMirror } from "@/components/EyeMirror";
-import MindReaderKeyboard from "@/components/MindReaderKeyboard";
-import { GazeButton } from "@/components/GazeButton";
-import { AgentProvider } from "@/components/AgentProvider";
-import { ContactsPanel } from "@/components/ContactsPanel";
-import type { FeaturePanel } from "@/lib/panels";
-import { SocialPanel } from "@/components/social/SocialPanel";
-import { SceneVision } from "@/components/SceneVision";
-import { XRayView } from "@/components/XRayView";
+import { useEffect, useRef } from "react";
+import { GazeProvider, useGaze } from "@/components/GazeProvider";
 
-const isTypingTarget = (target: EventTarget | null) => {
-  const element = target as HTMLElement | null;
-  return Boolean(element && (element.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName)));
-};
-
-function AppContent() {
-  const { appStage, sttReady, sttDownloadProgress, liveCaption, sttError } = useIrisStore();
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [mindReaderOpen, setMindReaderOpen] = useState(false);
-  const [panel, setPanel] = useState<Exclude<FeaturePanel, "keyboard"> | null>(null);
-  /** Set when a contact's conversation should open straight away. */
-  const [socialThread, setSocialThread] = useState<string | undefined>();
-  const closePanel = () => setPanel(null);
-  useEffect(() => { (window as unknown as Record<string, unknown>).__iris = useIrisStore; }, []);
-
-  const openPanel = (next: FeaturePanel) => {
-    if (next === "keyboard") {
-      setMindReaderOpen(true);
-      return;
-    }
-    if (next === "social") setSocialThread(undefined);
-    setPanel(next);
-  };
-  const openConversation = (contactId: string) => {
-    setSocialThread(contactId);
-    setPanel("social");
-  };
-
-  // Use the stream provided by the eye tracker
-  const { stream, startCalibration } = useGaze();
-
-  // Wire whisper mic to the eye tracker's stream
-  useWhisperMic(stream);
+function GazeDemo() {
+  const { stream, gaze, blinkCount, status, startGaze, stopGaze, startCalibration } = useGaze();
+  const previewRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-    }
-  }, [stream, appStage]);
-
-  // Recenter keyboard shortcut
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        e.preventDefault();
-        useIrisStore.getState().triggerRecenter();
-      } else if (e.code === 'KeyC') {
-        startCalibration();
-      } else if (e.code === 'KeyX' && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && !isTypingTarget(e.target)) {
-        // Opens the X-ray view; the view itself closes on X.
-        setPanel((current) => current ?? 'xray');
-      }
+    const video = previewRef.current;
+    if (!video) return;
+    video.srcObject = stream;
+    if (stream) void video.play().catch(() => undefined);
+    return () => {
+      if (video.srcObject === stream) video.srcObject = null;
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [stream]);
+
+  const statusText: Record<typeof status, string> = {
+    idle: "Camera is idle",
+    starting: "Starting camera and face tracking…",
+    ready: "Gaze tracking is ready",
+    error: "Gaze tracking failed",
+  };
 
   return (
-    <main className="h-screen w-screen overflow-hidden flex flex-col bg-[var(--iris-bg)] text-[var(--iris-text)] relative pt-12">
-      {appStage === 'landing' && <LandingPage />}
+    <main className="min-h-screen bg-slate-950 px-4 py-10 text-slate-100 sm:px-8">
+      <div className="mx-auto max-w-4xl">
+        <header className="mb-8">
+          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-300">I-See · Gaze tracking</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Camera gaze demo</h1>
+          <p className="mt-3 max-w-2xl text-slate-300">Allow camera access to preview your gaze estimate. Video stays in your browser and is not uploaded.</p>
+        </header>
 
-      {appStage !== 'landing' && <CalibrationOverlay />}
-
-      {appStage === 'project' && (
-        <>
-          {/* Video Preview — light theme card */}
-          <div className="fixed bottom-4 right-4 w-64 h-48 rounded-2xl z-50 overflow-hidden bg-[var(--iris-surface)]" style={{ boxShadow: "var(--shadow-elevated)" }}>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover opacity-90 [transform:scaleX(-1)]"
-            />
-            {sttError && (
-              <div className="absolute inset-0 bg-[var(--iris-danger)]/90 flex flex-col items-center justify-center p-3 text-center">
-                <span className="text-white font-semibold text-xs mb-1">WHISPER ERROR</span>
-                <span className="text-white/90 text-[10px] leading-tight truncate w-full">{sttError}</span>
+        <section className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl" aria-label="Camera gaze preview">
+          <div className="relative aspect-video w-full overflow-hidden bg-slate-800">
+            {stream ? (
+              <video
+                ref={previewRef}
+                autoPlay
+                muted
+                playsInline
+                className="h-full w-full object-cover"
+                style={{ transform: "scaleX(-1)" }}
+                aria-label="Live camera preview"
+              />
+            ) : (
+              <div className="absolute inset-0 grid place-items-center px-6 text-center text-slate-300">
+                <p>Camera preview will appear here when tracking starts.</p>
               </div>
             )}
-            {!sttReady && !sttError && (
-              <div className="absolute bottom-0 left-0 w-full h-6 bg-[var(--iris-surface-raised)]/90 flex items-center justify-center border-t border-[var(--iris-border)]">
-                <div
-                  className="absolute left-0 top-0 h-full transition-all duration-300"
-                  style={{ width: `${sttDownloadProgress}%`, background: "var(--iris-accent)", opacity: 0.2 }}
-                />
-                <span className="relative z-10 text-[10px] font-bold tracking-widest text-[var(--iris-text-muted)]">
-                  WHISPER {sttDownloadProgress}%
-                </span>
-              </div>
+            {gaze && (
+              <div
+                className="pointer-events-none absolute z-10 h-8 w-8 rounded-full border-2 border-white bg-cyan-400/80 shadow-[0_0_24px_8px_rgba(34,211,238,0.8)]"
+                style={{ left: `${gaze.x * 100}%`, top: `${gaze.y * 100}%`, transform: "translate(-50%, -50%)" }}
+                aria-label={`Gaze position ${Math.round(gaze.x * 100)} percent across, ${Math.round(gaze.y * 100)} percent down`}
+              />
             )}
-            {sttReady && liveCaption && !sttError && (
-              <div className="absolute bottom-0 left-0 w-full min-h-[20%] bg-[var(--iris-surface)]/90 flex items-center justify-center p-2 border-t border-[var(--iris-border)]">
-                <span className="text-sm font-bold text-[var(--iris-accent)] text-center leading-snug tracking-wide">
-                  {liveCaption}
-                </span>
-              </div>
-            )}
-            {/* Blank Audio Fallback Placeholder text */}
-            {sttReady && !liveCaption && !sttError && (
-              <div className="absolute bottom-0 left-0 w-full h-6 bg-[var(--iris-surface-hover)]/90 flex items-center justify-center border-t border-[var(--iris-border)]">
-                <span className="text-[var(--iris-text-muted)] font-bold text-[10px] tracking-widest">[BLANK_AUDIO]</span>
-              </div>
-            )}
+            <div className="pointer-events-none absolute inset-0 border border-white/10" />
           </div>
 
-          <NodeBuilder />
-
-          <div className="flex-1 min-h-0 w-full h-full z-10 relative">
-            <GridUI onOpenPanel={openPanel} />
-          </div>
-
-          <EyeMirror />
-
-          <GazeButton
-            id="open-mind-reader-keyboard"
-            customDwellTime={800}
-            className="!fixed bottom-24 right-4 z-[70] h-20 w-48 rounded-xl bg-[var(--iris-accent)] text-white shadow-xl sm:bottom-5"
-            text={mindReaderOpen ? "CLOSE GAZE KEYBOARD" : "OPEN GAZE KEYBOARD"}
-            onClick={() => setMindReaderOpen((open) => !open)}
-          />
-
-          {mindReaderOpen && (
-            <div
-              id="mind-reader-keyboard-panel"
-              role="region"
-              aria-label="Gaze keyboard"
-              className="fixed bottom-48 right-4 z-[810] max-h-[calc(100vh-13rem)] w-[min(820px,calc(100vw-2rem))] overflow-y-auto rounded-2xl sm:bottom-[7.5rem] sm:max-h-[calc(100vh-9.5rem)]"
-            >
-              <MindReaderKeyboard />
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div aria-live="polite">
+              <p className="font-semibold">{statusText[status]}</p>
+              <p className="mt-1 text-sm text-slate-300">Blinks: {blinkCount}{gaze ? ` · Gaze: ${gaze.x.toFixed(3)}, ${gaze.y.toFixed(3)}` : " · Waiting for face landmarks"}</p>
             </div>
-          )}
-
-          {panel === "contacts" && <ContactsPanel onClose={closePanel} onMessage={openConversation} />}
-          {panel === "social" && (
-            <SocialPanel
-              key={socialThread ?? "feed"}
-              onClose={closePanel}
-              initialTab={socialThread ? "messages" : "feed"}
-              initialThread={socialThread}
-            />
-          )}
-          {panel === "scene" && <SceneVision onClose={closePanel} />}
-          {panel === "xray" && <XRayView onClose={closePanel} />}
-        </>
-      )}
-
-      <GazeCursor />
+            <div className="flex flex-wrap gap-3">
+              {status === "idle" || status === "error" ? (
+                <button type="button" onClick={() => void startGaze()} className="rounded-lg bg-cyan-400 px-4 py-2 font-bold text-slate-950 hover:bg-cyan-300">Start camera</button>
+              ) : (
+                <button type="button" onClick={stopGaze} className="rounded-lg border border-slate-500 px-4 py-2 font-semibold hover:bg-slate-800">Stop camera</button>
+              )}
+              <button type="button" onClick={startCalibration} className="rounded-lg border border-cyan-300 px-4 py-2 font-semibold text-cyan-200 hover:bg-cyan-950">Calibrate center</button>
+            </div>
+          </div>
+        </section>
+        <p className="mt-4 text-sm text-slate-400">Status: {status}. Calibration centers your current gaze estimate; blink detection uses eyelid aspect ratio.</p>
+      </div>
     </main>
   );
 }
 
-export default function Home() {
+export default function Page() {
   return (
-    <GazeProvider>
-      <AgentProvider>
-        <AppContent />
-      </AgentProvider>
+    <GazeProvider autoStart>
+      <GazeDemo />
     </GazeProvider>
   );
 }
