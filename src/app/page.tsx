@@ -19,6 +19,7 @@ import type { FeaturePanel } from "@/lib/panels";
 import { SocialPanel } from "@/components/social/SocialPanel";
 import { SceneVision } from "@/components/SceneVision";
 import { XRayView } from "@/components/XRayView";
+import GazeModeToggle from "./components/GazeModeToggle";
 
 const isTypingTarget = (target: EventTarget | null) => {
   const element = target as HTMLElement | null;
@@ -163,6 +164,7 @@ function AppContent() {
             />
           )}
           {panel === "scene" && <SceneVision onClose={closePanel} />}
+          <GazeModeToggle />
           {panel === "xray" && <XRayView onClose={closePanel} />}
         </>
       )}
